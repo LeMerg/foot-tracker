@@ -134,6 +134,28 @@ Le workflow [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml)
 build et déploie automatiquement le site à chaque push sur `main`. Le site
 sera disponible à `https://<ton-user>.github.io/foot-tracker/`.
 
+> **Note** : sur un compte GitHub tout juste créé, le tout premier run
+> Actions/Pages peut rester bloqué en `queued` un moment (mesure anti-abus
+> de GitHub sur les runners gratuits). Si ça traîne, la section suivante
+> propose une alternative qui ne dépend pas des runners GitHub.
+
+### 3.4 Alternative : déployer sur Cloudflare Pages
+
+Cloudflare Pages est gratuit, ne dépend pas des runners GitHub Actions, et
+déploie en quelques secondes depuis ta machine. Utile si GitHub Pages est
+lent à se débloquer, ou si tu préfères cet hébergeur.
+
+```bash
+npx wrangler login          # une seule fois, ouvre ton navigateur
+npm run deploy:cloudflare   # build + déploiement, à chaque fois que tu veux publier
+```
+
+Le site sera disponible à `https://foot-tracker.pages.dev`. Contrairement à
+GitHub Pages, Cloudflare sert le site depuis la racine du domaine (pas de
+sous-dossier `/foot-tracker/`) — c'est pour ça que `build:cloudflare`
+surcharge le `base` de Vite via la variable `BASE_PATH` (voir
+[`vite.config.js`](vite.config.js)).
+
 ---
 
 ## 4. Structure du projet
