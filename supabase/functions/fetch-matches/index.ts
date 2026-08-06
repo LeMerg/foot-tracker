@@ -1,8 +1,9 @@
 // ============================================================================
 // Edge Function: fetch-matches
 //
-// Rôle : aller chercher les matchs des 5 championnats sur football-data.org
-// et les stocker dans la table `matches_cache` de Supabase, SANS jamais
+// Rôle : aller chercher les matchs des 5 championnats + la Ligue des
+// Champions sur football-data.org et les stocker dans la table
+// `matches_cache` de Supabase, SANS jamais
 // exposer la clé API football-data.org au navigateur (elle ne vit que dans
 // les secrets de cette fonction, côté serveur Supabase).
 //
@@ -21,7 +22,9 @@ import { createClient } from 'npm:@supabase/supabase-js@2'
 
 const CACHE_HOURS = 6
 
-const LEAGUES = ['PL', 'PD', 'BL1', 'FL1', 'SA'] as const
+// L'Europa League (EL) n'est pas disponible sur le plan gratuit de
+// football-data.org, donc pas incluse ici.
+const LEAGUES = ['PL', 'PD', 'BL1', 'FL1', 'SA', 'CL'] as const
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',

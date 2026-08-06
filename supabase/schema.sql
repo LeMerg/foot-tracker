@@ -42,7 +42,8 @@ create unique index if not exists users_pseudo_lower_idx on public.users (lower(
 -- ----------------------------------------------------------------------------
 create table if not exists public.matches_cache (
   id          bigint primary key, -- id du match côté football-data.org (réutilisé tel quel)
-  league      text not null check (league in ('PL','PD','BL1','FL1','SA')),
+  -- 'CL' = Ligue des Champions, en plus des 5 championnats domestiques.
+  league      text not null check (league in ('PL','PD','BL1','FL1','SA','CL')),
   matchday    int,
   utc_date    timestamptz not null,
   status      text not null, -- SCHEDULED, TIMED, IN_PLAY, FINISHED, POSTPONED, ...
@@ -68,7 +69,7 @@ create table if not exists public.watched_matches (
   -- qu'un match déjà présent dans le cache, ce qui est toujours le cas
   -- puisqu'on ne clique "vu" que sur un match déjà affiché à l'écran.
   match_id   bigint not null references public.matches_cache (id) on delete cascade,
-  league     text not null check (league in ('PL','PD','BL1','FL1','SA')),
+  league     text not null check (league in ('PL','PD','BL1','FL1','SA','CL')),
   watched_at timestamptz not null default now(),
 
   unique (user_id, match_id) -- un match ne peut être marqué "vu" qu'une fois par utilisateur

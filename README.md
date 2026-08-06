@@ -1,8 +1,11 @@
 # ⚽ Foot Tracker
 
 Site privé (toi + tes amis) qui regroupe le calendrier des 5 grands championnats
-européens (Premier League, La Liga, Bundesliga, Ligue 1, Serie A), avec pseudo,
-suivi des matchs vus et classement.
+européens (Premier League, La Liga, Bundesliga, Ligue 1, Serie A) et de la
+Ligue des Champions, avec pseudo, suivi des matchs vus et classement.
+
+> L'Europa League n'est pas incluse : elle n'est pas disponible sur le plan
+> gratuit de football-data.org (voir section 5 "Limites connues").
 
 **Stack** : React (Vite) + Tailwind CSS + Supabase (base de données/API +
 Edge Function) + données [football-data.org](https://www.football-data.org/).
@@ -196,3 +199,12 @@ l'endpoint `/teams`).
   qui connaissant l'URL du site peut créer un pseudo ou marquer des matchs
   comme vus pour n'importe quel autre pseudo. C'est un choix assumé pour un
   site privé entre amis de confiance (voir `supabase/schema.sql`).
+- **Europa League non disponible** : le plan gratuit football-data.org ne
+  propose que 13 compétitions (dont la Ligue des Champions, mais pas l'Europa
+  League). Pour l'ajouter il faudrait soit passer sur un plan payant
+  football-data.org, soit brancher une autre source de données.
+- La Ligue des Champions dépend du calendrier publié par football-data.org :
+  tant que la nouvelle saison n'est pas encore publiée par l'API (généralement
+  fin août), `matches_cache` ne contient que les matchs de la saison
+  précédente. Ça se met à jour tout seul (cache 6h) dès que l'API publie les
+  nouveaux matchs, sans rien à faire de ton côté.

@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import teams from '../data/teams.json'
-import { LEAGUES } from '../data/leagues'
+import { DOMESTIC_LEAGUES } from '../data/leagues'
 
 // Sélecteur d'équipe favorite : bouton qui ouvre un panneau avec recherche +
 // équipes groupées par championnat (logo inclus). Utilisé à l'onboarding et
@@ -20,7 +20,7 @@ export default function TeamSelect({ value, onChange }) {
 
   const groups = useMemo(() => {
     const q = query.trim().toLowerCase()
-    return LEAGUES.map((league) => ({
+    return DOMESTIC_LEAGUES.map((league) => ({
       league,
       teams: teams.filter(
         (t) => t.league === league.code && (!q || t.name.toLowerCase().includes(q)),
