@@ -1,0 +1,11 @@
+# Config Supabase CLI pour ce projet.
+# project_id sert seulement de nom local pour la CLI, ce n'est pas ton vrai
+# projet distant : le lien se fait avec `supabase link` (voir README).
+project_id = "foot-tracker"
+
+[functions.fetch-matches]
+# Cette fonction ne fait rien de sensible (elle ne fait que déclencher un
+# rafraîchissement du cache de matchs, public de toute façon) donc on la
+# laisse accessible sans JWT Supabase — ça évite aussi tout souci de
+# compatibilité avec le nouveau format de clé publique "sb_publishable_...".
+verify_jwt = false
