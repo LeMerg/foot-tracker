@@ -1,11 +1,22 @@
 import { useEffect, useMemo, useState } from 'react'
-import { addMonths, addWeeks, endOfMonth, endOfWeek, format, startOfMonth, startOfWeek } from 'date-fns'
+import {
+  addMonths,
+  addWeeks,
+  eachDayOfInterval,
+  endOfMonth,
+  endOfWeek,
+  format,
+  isSameDay,
+  startOfMonth,
+  startOfWeek,
+} from 'date-fns'
 import { fr } from 'date-fns/locale'
 import { fetchMatches, triggerMatchesRefresh } from '../lib/matches'
 import { useUser } from '../context/UserContext'
 import { useWatchedMatches } from '../hooks/useWatchedMatches'
 import { LEAGUES } from '../data/leagues'
 import MatchCard from '../components/MatchCard'
+import MonthGrid from '../components/MonthGrid'
 
 const VIEW_MODES = [
   { id: 'week', label: 'Semaine' },
@@ -13,15 +24,23 @@ const VIEW_MODES = [
 ]
 
 function getRange(anchor, mode) {
-  return mode === 'week'
-    ? { from: startOfWeek(anchor, { weekStartsOn: 1 }), to: endOfWeek(anchor, { weekStartsOn: 1 }) }
-    : { from: startOfMonth(anchor), to: endOfMonth(anchor) }
+  if (mode === 'week') {
+    return { from: startOfWeek(anchor, { weekStartsOn: 1 }), to: endOfWeek(anchor, { weekStartsOn: 1 }) }
+  }
+  // En mode mois, on récupère aussi les jours "de remplissage" des mois
+  // voisins affichés dans la grille (ex: les derniers jours de juillet qui
+  // apparaissent sur la première ligne de la grille d'août).
+  return {
+    from: startOfWeek(startOfMonth(anchor), { weekStartsOn: 1 }),
+    to: endOfWeek(endOfMonth(anchor), { weekStartsOn: 1 }),
+  }
 }
 
 export default function CalendarPage() {
   const { user } = useUser()
   const [mode, setMode] = useState('week')
   const [anchor, setAnchor] = useState(() => new Date())
+  const [selectedDay, setSelectedDay] = useState(null)
   const [selectedLeagues, setSelectedLeagues] = useState(() => new Set(LEAGUES.map((l) => l.code)))
   const [matches, setMatches] = useState([])
   const [loading, setLoading] = useState(true)
@@ -54,6 +73,12 @@ export default function CalendarPage() {
     }
   }, [range, selectedLeagues])
 
+  // On repart sans jour sélectionné à chaque changement de vue/période :
+  // l'ancien jour sélectionné n'a souvent plus de sens dans la nouvelle plage.
+  useEffect(() => {
+    setSelectedDay(null)
+  }, [mode, anchor])
+
   function toggleLeague(code) {
     setSelectedLeagues((prev) => {
       const next = new Set(prev)
@@ -67,15 +92,30 @@ export default function CalendarPage() {
     setAnchor((prev) => (mode === 'week' ? addWeeks(prev, direction) : addMonths(prev, direction)))
   }
 
-  const groupedByDay = useMemo(() => {
+  const matchesByDay = useMemo(() => {
     const groups = new Map()
     for (const match of matches) {
       const key = format(new Date(match.utc_date), 'yyyy-MM-dd')
       if (!groups.has(key)) groups.set(key, [])
       groups.get(key).push(match)
     }
-    return [...groups.entries()]
+    return groups
   }, [matches])
+
+  const monthGridDays = useMemo(
+    () => (mode === 'month' ? eachDayOfInterval({ start: range.from, end: range.to }) : []),
+    [mode, range],
+  )
+
+  // En mode semaine : tous les jours de la plage. En mode mois : uniquement
+  // le jour sélectionné dans la grille (s'il y en a un).
+  const agendaEntries = useMemo(() => {
+    const entries = [...matchesByDay.entries()]
+    if (mode === 'week') return entries
+    if (!selectedDay) return []
+    const key = format(selectedDay, 'yyyy-MM-dd')
+    return entries.filter(([day]) => day === key)
+  }, [matchesByDay, mode, selectedDay])
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-6">
@@ -117,7 +157,7 @@ export default function CalendarPage() {
       </div>
 
       <p className="mt-2 text-sm capitalize text-[var(--color-text-dim)]">
-        {format(range.from, 'd MMM', { locale: fr })} — {format(range.to, 'd MMM yyyy', { locale: fr })}
+        {format(anchor, mode === 'week' ? "'Semaine du' d MMM yyyy" : 'MMMM yyyy', { locale: fr })}
       </p>
 
       <div className="mt-4 flex flex-wrap gap-2">
@@ -139,17 +179,39 @@ export default function CalendarPage() {
         })}
       </div>
 
-      <div className="mt-6 space-y-6 pb-10">
-        {loading && <p className="text-[var(--color-text-dim)]">Chargement des matchs…</p>}
+      {loading && <p className="mt-6 text-[var(--color-text-dim)]">Chargement des matchs…</p>}
 
-        {!loading && groupedByDay.length === 0 && (
+      {!loading && mode === 'month' && (
+        <div className="mt-6">
+          <MonthGrid
+            days={monthGridDays}
+            matchesByDay={matchesByDay}
+            anchorMonth={anchor}
+            selectedDay={selectedDay}
+            onSelectDay={(day) => setSelectedDay((prev) => (prev && isSameDay(prev, day) ? null : day))}
+          />
+        </div>
+      )}
+
+      <div className="mt-6 space-y-6 pb-10">
+        {!loading && mode === 'week' && agendaEntries.length === 0 && (
           <p className="text-[var(--color-text-dim)]">
             Aucun match sur cette période (ou cache pas encore rempli — voir README pour déployer
             l’Edge Function).
           </p>
         )}
 
-        {groupedByDay.map(([day, dayMatches]) => (
+        {!loading && mode === 'month' && !selectedDay && (
+          <p className="text-center text-sm text-[var(--color-text-dim)]">
+            Clique un jour dans le calendrier pour voir le détail des matchs.
+          </p>
+        )}
+
+        {!loading && mode === 'month' && selectedDay && agendaEntries.length === 0 && (
+          <p className="text-center text-sm text-[var(--color-text-dim)]">Aucun match ce jour-là.</p>
+        )}
+
+        {agendaEntries.map(([day, dayMatches]) => (
           <div key={day}>
             <h2 className="mb-2 text-sm font-semibold capitalize text-[var(--color-text-dim)]">
               {format(new Date(day), 'EEEE d MMMM', { locale: fr })}
