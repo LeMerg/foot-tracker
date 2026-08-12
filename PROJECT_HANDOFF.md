@@ -1,4 +1,4 @@
-# Foot Tracker — Document de reprise de session
+# FanLog — Document de reprise de session
 
 > Rédigé pour continuer ce projet dans une nouvelle conversation Claude Code
 > une fois la limite de contexte de la session précédente atteinte. Lis ce
@@ -20,111 +20,48 @@ chacun peut marquer ce qu'il a "vu" et comparer son total avec ses potes.
 
 ## 2. ⚠️ ÉTAT ACTUEL — À LIRE EN PREMIER
 
-**Mise à jour : le travail décrit ci-dessous a été validé par
-l'utilisateur, commité (`cb730d1`), poussé sur GitHub, et déployé sur
-Cloudflare Pages. Le site en ligne est à jour.** Cette section garde
-l'historique de ce qui a changé, pour mémoire.
+**Tout est validé, commité (`946855c`), poussé sur GitHub, et déployé sur
+Cloudflare Pages. Le site en ligne est à jour, migrations et Edge Functions
+comprises.** Aucune action en attente.
 
-### Ce qui est EN LIGNE actuellement (dernier commit poussé : `cb730d1`)
+### Ce qui est EN LIGNE actuellement
 
 - Foot (5 championnats + Ligue des Champions), NBA, F1 : calendrier,
-  "marquer vu", classement, page profil.
-- Onboarding pseudo + reconnexion multi-appareils ("J'ai déjà un pseudo").
-- Logos NBA corrects, statuts d'événements (annulé/reporté/en direct),
-  trigger anti double-comptage, modale "Quoi de neuf".
-- Polish visuel : accent de couleur par ligue, animation "marquer vu",
-  podium sur le classement, nav avec avatar, états de chargement skeleton.
-- Vérifié en production : `https://foot-tracker.pages.dev` sert bien le
-  nouveau build (`assets/index-CdXwheEj.js`), site répond 200.
+  "marquer vu", classement filtrable par sport, page profil complète.
+- Onboarding pseudo + reconnexion multi-appareils.
+- Cliquer sur son pseudo (nav) ouvre son profil (`/user/:pseudo`), plus
+  `/parametres` (accessible via le menu) pour changer d'équipe favorite.
+- Ajout de matchs de foot manquants (équipes en texte libre, `custom_matches`).
+- **Détail au clic** sur un match/course déjà joué :
+  - Foot : score mi-temps, arbitre(s), stage/matchday — récupéré une fois
+    via Edge Function `fetch-match-detail`, caché en base de façon permanente
+    (`matches_cache.details`).
+  - NBA : score quart-temps par quart-temps — déjà présent dans la réponse
+    balldontlie qu'on récupère de toute façon, aucun appel API en plus.
+  - F1 : classement complet de la session (podium, DNF/DNS/DSQ, écurie,
+    écart) via Edge Function `fetch-session-result`, qui cache aussi de
+    façon permanente une fois la session terminée — évite le rate-limit
+    OpenF1 (429 constaté quand l'appel se faisait direct depuis le
+    navigateur, corrigé en passant par le serveur).
+- Couleurs par sport (NBA orange `#f97316`, F1 rouge `#e10600`, foot/nav
+  restent émeraude).
+- Renommage **Foot Tracker → FanLog** (titre, logo nav, README) — l'URL
+  (`foot-tracker.pages.dev`), le repo GitHub et le projet Cloudflare
+  gardent leur nom technique, volontairement inchangé.
+- Modale "Quoi de neuf" à jour (`CHANGELOG_VERSION = '2026-08-v4'`),
+  vérifiée en production.
 
-### Ce qui avait été fait en local avant validation (maintenant en ligne)
+### Limites connues (API gratuites, vérifiées en live, pas de contournement)
 
-Deux passes de travail, toutes deux **vérifiées et fonctionnelles en local**
-(build OK, testé dans le navigateur contre la vraie base Supabase), mais
-`git status` montre tout ça comme non commité :
-
-**Passe 1 — Corrections de données (P0 du brief utilisateur)**
-- Logos NBA corrects (avant : aucun logo, ou logos au hasard)
-- Système de statut unifié : `scheduled / live / completed / postponed /
-  cancelled`, calculé à l'affichage, badges "Reporté"/"Annulé"/"En direct"
-- Bouton "Marquer vu" masqué pour un match annulé/reporté
-- Trigger SQL anti double-comptage (si un match déjà "vu" devient annulé,
-  la ligne `watched_matches` est supprimée automatiquement)
-- Modale "Quoi de neuf" affichée une fois à la prochaine connexion de
-  chacun (couvre aussi les updates précédentes jamais annoncées : NBA/F1/C1)
-
-**Passe 2 — Polish visuel (P1/P2 du brief)**
-- Bordure gauche colorée par ligue sur les cartes
-- Composant `TeamLogo` réutilisable avec repli propre (initiales) si un
-  logo est absent/cassé — remplace tous les `<img>` ad-hoc
-- Bouton "Marquer vu" repensé (icône + animation "pop" à l'activation)
-- Carte teintée en vert une fois marquée vue
-- Podium doré/argent/bronze sur le classement
-- Nav avec avatar (initiale du pseudo)
-- États de chargement en "skeleton" (pulse) au lieu de texte brut
-- Petites animations/transitions cohérentes (`src/index.css`)
-
-### État exact Git / Supabase (mis à jour après validation utilisateur)
-
-L'utilisateur a validé le travail ci-dessus. Les changements ont été
-**commités en local** (`git commit`), mais **PAS poussés sur GitHub** et
-**PAS déployés sur Cloudflare** — seul un `commit` a été explicitement
-demandé, pas de `push`/`deploy`. Ces deux actions restent à faire dès que
-demandé explicitement.
-
-```
-git log -1 (poussé sur GitHub) : 76b976a "Refonte multi-sport : ajout NBA et Formule 1"
-git log -1 (local, non poussé) : voir `git log -1` — commit de cette passe V2
-Site en ligne (JS hash)         : assets/index-Cfn1nawn.js   (ANCIEN, inchangé)
-Build local (JS hash)           : assets/index-tXZIwWh0.js   (NOUVEAU, commité mais pas déployé)
-Migrations Supabase      : TOUTES appliquées côté base (le backend est à
-                            jour), y compris les 2 dernières non commitées :
-                            20260113000000_cancel_cleanup_trigger.sql
-                            20260113000100_cleanup_test_user_6.sql
-Edge Functions déployées : fetch-nba et fetch-races sont déjà en version
-                            "V2" (logos + statuts riches) sur Supabase,
-                            MÊME SI le frontend correspondant n'est pas
-                            encore en ligne.
-```
-
-**Fichiers modifiés/créés non commités** (`git status --short`) :
-```
- M src/App.jsx
- M src/components/MatchCard.jsx
- M src/components/MonthGrid.jsx
- M src/components/NavBar.jsx
- M src/components/RaceList.jsx
- M src/components/TeamSelect.jsx
- M src/index.css
- M src/pages/CalendarPage.jsx
- M src/pages/LeaderboardPage.jsx
- M src/pages/UserDetailPage.jsx
- M supabase/functions/fetch-nba/index.ts
- M supabase/functions/fetch-races/index.ts
-?? src/components/CardSkeleton.jsx
-?? src/components/CheckIcon.jsx
-?? src/components/TeamLogo.jsx
-?? src/components/WhatsNewModal.jsx
-?? src/data/changelog.js
-?? src/lib/eventStatus.js
-?? supabase/functions/_shared/
-?? supabase/migrations/20260113000000_cancel_cleanup_trigger.sql
-?? supabase/migrations/20260113000100_cleanup_test_user_6.sql
-```
-
-### 🎯 Prochaine action probable
-
-Le travail est validé et commité. Il ne reste que :
-```bash
-cd "C:\Users\Mergim\Desktop\Portfolio\foot-tracker"
-git push
-npm run deploy:cloudflare
-```
-(Pas besoin de refaire `supabase db push` ni `supabase functions deploy` :
-c'est déjà fait, voir ci-dessus — seul le frontend doit être poussé/déployé.)
-**Ne pas le faire tant que l'utilisateur ne le redemande pas explicitement**
-— seul un `commit` a été autorisé jusqu'ici, pas de `push` public ni de mise
-en ligne.
+- **Foot** : pas de compositions ni d'événements (buts/cartons minute par
+  minute) sur le plan gratuit football-data.org — confirmé en inspectant la
+  vraie réponse de `/v4/matches/{id}` (champ `odds` explicitement bloqué
+  "Activate Odds-Package...", aucun champ `goals`/`bookings`).
+- **NBA** : pas de stats par joueur (`box_scores` renvoie 401 sur le plan
+  gratuit balldontlie, confirmé par appel direct). Seul le score
+  quart-temps par équipe est disponible.
+- Passer sur un plan payant pour l'une des deux API débloquerait ça, mais
+  n'a pas été fait (coût, décision à laisser à l'utilisateur).
 
 ## 3. Stack technique
 
@@ -144,9 +81,12 @@ en ligne.
 | `users` | pseudo + équipe favorite (foot uniquement). Pas de mot de passe. |
 | `matches_cache` | Cache des matchs **foot + NBA** (même forme : équipe A vs équipe B). `sport` (`football`/`basketball`), `external_id` (id de la source) + `id` (clé technique auto-générée, voir section 4.1). |
 | `watched_matches` | Quels matchs un utilisateur a marqués "vu". FK vers `matches_cache.id`. |
-| `races_cache` | Cache des week-ends de course **F1** (modèle séparé : une course ≠ un match). `sessions` stocké en `jsonb` (essais/qualifs/course avec `is_cancelled`). |
+| `races_cache` | Cache des week-ends de course **F1** (modèle séparé : une course ≠ un match). `sessions` stocké en `jsonb` (essais/qualifs/course avec `is_cancelled`, `session_key` OpenF1 pour le classement). |
 | `watched_races` | Idem `watched_matches` mais pour les courses (suivi au niveau du week-end entier, pas par session). |
-| Vue `leaderboard` | Combine `count(watched_matches)` + `count(watched_races)` par utilisateur. |
+| `custom_matches` | Matchs de foot ajoutés manuellement (équipes en texte libre, absents du cache API). Créer une ligne = l'avoir vu. |
+| `session_results_cache` | Classement d'une session F1 (`session_key` → `results` jsonb), rempli à la demande par `fetch-session-result`, cache permanent une fois la session terminée. |
+| Vue `leaderboard` | `total_watched` + détail par sport (`football_watched`, `basketball_watched`, `f1_watched`) — foot inclut `custom_matches`. |
+| `matches_cache.details` | jsonb, nullable — détail au clic. Foot : `{halfTime,referees,stage,group,venue}` (rempli à la demande par `fetch-match-detail`, permanent). NBA : `{periods:{home,away}}` (rempli directement par `fetch-nba`, déjà dans la réponse balldontlie). |
 
 ### 4.1 Pourquoi `matches_cache.id` est une clé technique séparée
 
@@ -186,10 +126,17 @@ venir". Vérifié par appel direct à l'API, sur les 4 sports du groupe
 **UFC/MMA** : pas d'API officielle publique, pas de source gratuite fiable
 trouvée. Reporté indéfiniment (pas de piste sérieuse actuellement).
 
-Les 3 Edge Functions (`fetch-matches`, `fetch-nba`, `fetch-races`) suivent
-toutes le même pattern : throttle de 6h par source (vérifie `fetched_at`
-avant de rappeler l'API externe), appelées en fire-and-forget par le
-frontend à chaque ouverture du calendrier.
+Les 3 Edge Functions de calendrier (`fetch-matches`, `fetch-nba`,
+`fetch-races`) suivent le même pattern : throttle de 6h par source
+(vérifie `fetched_at` avant de rappeler l'API externe), appelées en
+fire-and-forget par le frontend à chaque ouverture du calendrier.
+
+Deux autres Edge Functions, à la demande (pas de throttle 6h, cache
+**permanent** une fois rempli — un résultat déjà joué ne change plus) :
+- `fetch-match-detail` (foot uniquement) : score mi-temps/arbitre/stage.
+- `fetch-session-result` (F1) : classement complet d'une session. Route
+  aussi les appels OpenF1 côté serveur plutôt que direct navigateur — évite
+  le rate-limit (429 constaté en pratique) et le CORS côté client.
 
 ## 6. Pourquoi Cloudflare Pages et pas GitHub Pages
 
@@ -214,22 +161,29 @@ Cloudflare, voir `vite.config.js`).
 6. Connexion multi-appareils ("J'ai déjà un pseudo")
 7. Audit sécurité complet (RLS, secrets, bundle frontend) — rien trouvé
 8. Refonte multi-sport : NBA + F1 (voir section 4 pour le modèle de données)
-9. **[EN ATTENTE DE VALIDATION]** Brief V2 : logos NBA, statuts
-   d'événements, anti double-comptage, modale "quoi de neuf"
-10. **[EN ATTENTE DE VALIDATION]** Polish visuel (P1/P2 du brief)
+9. V2 : logos NBA, statuts d'événements, anti double-comptage, modale
+   "quoi de neuf", polish visuel (bordures colorées, podium, skeleton)
+10. V3 : classement filtrable par sport, pseudo (nav) → profil complet,
+    renommage FanLog, ajout de matchs de foot manquants
+11. V4 : détail au clic (mi-temps/arbitre foot, quart-temps NBA, classement
+    F1), couleurs d'onglet par sport
+12. Fix : classement F1 routé via Edge Function (`fetch-session-result`)
+    pour corriger un vrai rate-limit OpenF1 rencontré en test
 
 ## 8. Hors scope (reporté, pas commencé)
 
-D'après le brief `FootTracker_V2_Claude_Implementation_Brief.md` (dans les
-Téléchargements de l'utilisateur) :
-- Home dashboard dédié (section 10 du brief)
-- Page statistiques personnelles détaillée (section 11)
-- Filtres de classement (par sport, par période) (section 12)
-- Refonte de la page profil (section 13)
-- Navigation mobile en bottom bar (section 16)
-- Streaks, achievements, résumé annuel (P3, explicitement optionnel)
-- UFC/MMA (bloqué, pas de source de données)
+- Home dashboard dédié
+- Page statistiques personnelles détaillée
+- Refonte de la page profil au-delà de ce qui existe déjà
+- Navigation mobile en bottom bar
+- Rendre cliquables les lignes de matchs vus sur `UserDetailPage.jsx`
+  (même logique de détail que le calendrier, pas encore câblée là)
+- Streaks, achievements, résumé annuel
+- UFC/MMA (bloqué, pas de source de données gratuite)
 - Europa League (bloqué, pas dans le plan gratuit football-data.org)
+- Compositions/événements de match foot, stats joueur NBA — bloqués sur
+  le plan gratuit des API respectives (voir section 2), débloquable
+  seulement avec un plan payant
 
 ## 9. Pièges connus / notes utiles
 
@@ -258,13 +212,11 @@ Téléchargements de l'utilisateur) :
 ## 10. Pour reprendre le travail
 
 1. Lire ce fichier en entier (fait, si tu lis ceci).
-2. `cd C:\Users\Mergim\Desktop\Portfolio\foot-tracker && git status` pour
-   confirmer que l'état correspond bien à la section 2.
-3. Si l'utilisateur valide le travail en attente : commit + push + `npm run
-   deploy:cloudflare` (voir section 2, aucune action Supabase nécessaire).
-4. Si l'utilisateur veut des changements : les fichiers concernés sont
-   listés en section 2, tous non commités donc librement modifiables.
-5. Pour la suite (section 8) : redemander à l'utilisateur ses priorités
-   plutôt que de tout attaquer d'un coup — c'est l'approche qui a bien
-   fonctionné jusqu'ici (voir section 30 du brief : privilégier la
-   fiabilité du suivi existant plutôt qu'empiler des fonctionnalités).
+2. `cd C:\Users\Mergim\Desktop\Portfolio\foot-tracker && git status` — tout
+   devrait être propre (rien en attente, voir section 2).
+3. Pour toute nouvelle demande de taille significative (plusieurs
+   fichiers, décision d'architecture) : passer par Plan Mode, comme pour
+   toutes les passes de cette session — l'utilisateur veut systématiquement
+   voir les changements avant qu'ils soient commités/déployés.
+4. Redemander à l'utilisateur ses priorités plutôt que de tout attaquer
+   d'un coup (section 8 pour ce qui reste hors scope).
