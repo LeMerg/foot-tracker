@@ -1,4 +1,5 @@
 import { format, isSameDay, isSameMonth, isToday } from 'date-fns'
+import TeamLogo from './TeamLogo'
 
 const WEEKDAY_LABELS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']
 const MAX_VISIBLE_PER_DAY = 3
@@ -44,10 +45,10 @@ function DayCell({ day, matches, isCurrentMonth, isSelected, onSelect }) {
     <button
       type="button"
       onClick={() => onSelect(day)}
-      className={`flex min-h-[68px] flex-col items-stretch gap-1 rounded-lg border p-1 text-left transition sm:min-h-[92px] sm:p-1.5 ${
+      className={`flex min-h-[68px] flex-col items-stretch gap-1 rounded-lg border p-1 text-left transition-all duration-150 sm:min-h-[92px] sm:p-1.5 ${
         isSelected
-          ? 'border-emerald-500 bg-emerald-500/10'
-          : 'border-[var(--color-border)] bg-[var(--color-panel)] hover:border-emerald-500/40'
+          ? 'border-emerald-500 bg-emerald-500/10 shadow-[0_0_0_1px_rgba(16,185,129,0.3)]'
+          : 'border-[var(--color-border)] bg-[var(--color-panel)] hover:-translate-y-0.5 hover:border-emerald-500/40 hover:shadow-lg hover:shadow-black/20'
       } ${isCurrentMonth ? '' : 'opacity-40'}`}
     >
       <span
@@ -61,8 +62,8 @@ function DayCell({ day, matches, isCurrentMonth, isSelected, onSelect }) {
       <div className="flex flex-1 flex-col gap-0.5 overflow-hidden">
         {visible.map((match) => (
           <div key={match.id} className="flex items-center gap-0.5 text-[10px] leading-none text-[var(--color-text-dim)]">
-            <img src={match.home_crest} alt="" className="h-3.5 w-3.5 shrink-0 object-contain" />
-            <img src={match.away_crest} alt="" className="h-3.5 w-3.5 shrink-0 object-contain" />
+            <TeamLogo src={match.home_crest} name={match.home_team} size="2xs" />
+            <TeamLogo src={match.away_crest} name={match.away_team} size="2xs" />
             {/* Heure abrégée sur mobile (peu de place dans une grille à 7 colonnes), complète à partir de sm */}
             <span className="ml-auto shrink-0">
               <span className="sm:hidden">{format(new Date(match.utc_date), 'H')}h</span>

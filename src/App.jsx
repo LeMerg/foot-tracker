@@ -2,6 +2,7 @@ import { Routes, Route } from 'react-router-dom'
 import { useUser } from './context/UserContext'
 import Onboarding from './components/Onboarding'
 import NavBar from './components/NavBar'
+import WhatsNewModal from './components/WhatsNewModal'
 import CalendarPage from './pages/CalendarPage'
 import LeaderboardPage from './pages/LeaderboardPage'
 import UserDetailPage from './pages/UserDetailPage'
@@ -22,6 +23,7 @@ function App() {
 
   return (
     <div className="min-h-screen">
+      <WhatsNewModal />
       <NavBar />
       <Routes>
         <Route path="/" element={<CalendarPage />} />

@@ -76,6 +76,7 @@ Deno.serve(async (req) => {
         name: s.session_name,
         date_start: s.date_start,
         date_end: s.date_end,
+        is_cancelled: s.is_cancelled ?? false,
       })
       sessionsByMeeting.set(s.meeting_key, list)
     }

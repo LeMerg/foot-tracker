@@ -20,6 +20,7 @@ import { SPORTS } from '../data/sports'
 import MatchCard from '../components/MatchCard'
 import MonthGrid from '../components/MonthGrid'
 import RaceList from '../components/RaceList'
+import CardSkeleton from '../components/CardSkeleton'
 
 const VIEW_MODES = [
   { id: 'week', label: 'Semaine' },
@@ -163,9 +164,9 @@ export default function CalendarPage() {
           <button
             key={s.id}
             onClick={() => handleSportChange(s.id)}
-            className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition ${
+            className={`rounded-lg px-3.5 py-1.5 text-sm font-semibold transition-all ${
               sport === s.id
-                ? 'bg-emerald-500 text-white'
+                ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/20'
                 : 'bg-[var(--color-panel-2)] text-[var(--color-text-dim)] hover:text-white'
             }`}
           >
@@ -176,7 +177,7 @@ export default function CalendarPage() {
 
       {sport === 'f1' ? (
         <>
-          {loadingRaces && <p className="mt-6 text-[var(--color-text-dim)]">Chargement des courses…</p>}
+          {loadingRaces && <CardSkeleton />}
           {!loadingRaces && (
             <RaceList races={races} watchedIds={watchedRaceIds} onToggleWatched={toggleRace} />
           )}
@@ -187,31 +188,33 @@ export default function CalendarPage() {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => shift(-1)}
-                className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 hover:bg-[var(--color-panel-2)]"
+                className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 transition-colors hover:border-emerald-500/40 hover:bg-[var(--color-panel-2)]"
               >
                 ←
               </button>
               <button
                 onClick={() => setAnchor(new Date())}
-                className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-sm hover:bg-[var(--color-panel-2)]"
+                className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-sm transition-colors hover:border-emerald-500/40 hover:bg-[var(--color-panel-2)]"
               >
                 Aujourd’hui
               </button>
               <button
                 onClick={() => shift(1)}
-                className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 hover:bg-[var(--color-panel-2)]"
+                className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 transition-colors hover:border-emerald-500/40 hover:bg-[var(--color-panel-2)]"
               >
                 →
               </button>
             </div>
 
-            <div className="flex rounded-lg border border-[var(--color-border)] p-0.5">
+            <div className="flex rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] p-0.5">
               {VIEW_MODES.map((m) => (
                 <button
                   key={m.id}
                   onClick={() => setMode(m.id)}
-                  className={`rounded-md px-3 py-1 text-sm font-medium transition ${
-                    mode === m.id ? 'bg-emerald-500 text-white' : 'text-[var(--color-text-dim)]'
+                  className={`rounded-md px-3 py-1 text-sm font-medium transition-all ${
+                    mode === m.id
+                      ? 'bg-emerald-500 text-white shadow-sm'
+                      : 'text-[var(--color-text-dim)] hover:text-white'
                   }`}
                 >
                   {m.label}
@@ -231,7 +234,7 @@ export default function CalendarPage() {
                 <button
                   key={league.code}
                   onClick={() => toggleLeague(league.code)}
-                  className="rounded-full px-3 py-1 text-xs font-semibold transition"
+                  className={`rounded-full px-3 py-1 text-xs font-semibold transition-all ${active ? 'shadow-sm' : 'opacity-70 hover:opacity-100'}`}
                   style={{
                     backgroundColor: active ? league.color : 'var(--color-panel-2)',
                     color: active ? 'white' : 'var(--color-text-dim)',
@@ -243,7 +246,7 @@ export default function CalendarPage() {
             })}
           </div>
 
-          {loadingMatches && <p className="mt-6 text-[var(--color-text-dim)]">Chargement des matchs…</p>}
+          {loadingMatches && <CardSkeleton />}
 
           {!loadingMatches && mode === 'month' && (
             <div className="mt-6">
@@ -277,7 +280,8 @@ export default function CalendarPage() {
 
             {agendaEntries.map(([day, dayMatches]) => (
               <div key={day}>
-                <h2 className="mb-2 text-sm font-semibold capitalize text-[var(--color-text-dim)]">
+                <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold capitalize text-[var(--color-text-dim)]">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500/70" />
                   {format(new Date(day), 'EEEE d MMMM', { locale: fr })}
                 </h2>
                 <div className="space-y-2">

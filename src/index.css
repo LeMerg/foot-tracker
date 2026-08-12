@@ -8,13 +8,6 @@
   --color-border: #2a3341;
   --color-text: #e6eaf0;
   --color-text-dim: #8b96a5;
-
-  /* Couleurs d'accent par ligue (utilisées comme badges/bordures) */
-  --league-PL: #3d195b;
-  --league-PD: #ee8707;
-  --league-BL1: #d3010c;
-  --league-FL1: #dae025;
-  --league-SA: #008fd7;
 }
 
 html,
@@ -29,6 +22,10 @@ body {
   color: var(--color-text);
   font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
+  /* Légère lueur radiale en fond, pour casser le noir uniforme sans
+     distraire — ambiance "stade/arène" discrète plutôt qu'un flat design. */
+  background-image: radial-gradient(ellipse 900px 500px at 50% -10%, rgba(16, 185, 129, 0.06), transparent);
+  background-attachment: fixed;
 }
 
 ::-webkit-scrollbar {
@@ -41,4 +38,36 @@ body {
 ::-webkit-scrollbar-thumb {
   background: var(--color-border);
   border-radius: 999px;
+}
+
+/* Micro-interactions partagées (section 18 du brief : courtes, discrètes). */
+@keyframes watched-pop {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.15);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.animate-watched-pop {
+  animation: watched-pop 0.28s ease-out;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, var(--color-panel) 25%, var(--color-panel-2) 50%, var(--color-panel) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
 }

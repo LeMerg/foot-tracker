@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import teams from '../data/teams.json'
 import { DOMESTIC_LEAGUES } from '../data/leagues'
+import TeamLogo from './TeamLogo'
 
 // Sélecteur d'équipe favorite : bouton qui ouvre un panneau avec recherche +
 // équipes groupées par championnat (logo inclus). Utilisé à l'onboarding et
@@ -43,7 +44,7 @@ export default function TeamSelect({ value, onChange }) {
       >
         {selected ? (
           <>
-            <img src={selected.crest} alt="" className="h-6 w-6 object-contain" />
+            <TeamLogo src={selected.crest} name={selected.name} size="sm" />
             <span className="flex-1 truncate">{selected.name}</span>
             <span className="text-xs text-[var(--color-text-dim)]">{selected.leagueName}</span>
           </>
@@ -77,7 +78,7 @@ export default function TeamSelect({ value, onChange }) {
                   onClick={() => handlePick(team)}
                   className="flex w-full items-center gap-3 px-3 py-1.5 text-left hover:bg-[var(--color-panel-2)]"
                 >
-                  <img src={team.crest} alt="" className="h-5 w-5 object-contain" />
+                  <TeamLogo src={team.crest} name={team.name} size="xs" />
                   <span className="truncate text-sm">{team.name}</span>
                 </button>
               ))}

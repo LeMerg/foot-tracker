@@ -13,6 +13,7 @@
 // ============================================================================
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
+import { NBA_TEAMS } from '../_shared/nbaTeams.ts'
 
 const CACHE_HOURS = 6
 const WINDOW_DAYS = 90
@@ -85,20 +86,34 @@ async function fetchNbaGames(): Promise<any[]> {
   return games
 }
 
+// balldontlie n'a pas de statut unique et propre comme football-data.org :
+// on reconstruit le même vocabulaire (SCHEDULED/IN_PLAY/FINISHED/POSTPONED/
+// CANCELLED) à partir de plusieurs champs (status_state, postponed, status
+// texte libre) pour que le reste de l'app (src/lib/eventStatus.js) n'ait
+// qu'UN SEUL vocabulaire à comprendre, quel que soit le sport.
+function mapGameStatus(game: any): string {
+  if (game.postponed) return 'POSTPONED'
+  if (typeof game.status === 'string' && /cancel/i.test(game.status)) return 'CANCELLED'
+  if (game.status_state === 'final') return 'FINISHED'
+  if (game.period > 0) return 'IN_PLAY' // quart-temps en cours, mi-temps, etc.
+  return 'SCHEDULED'
+}
+
 function mapGameToRow(game: any) {
+  const homeTeam = NBA_TEAMS[game.home_team?.id]
+  const awayTeam = NBA_TEAMS[game.visitor_team?.id]
+
   return {
     external_id: game.id,
     sport: 'basketball',
     league: LEAGUE,
     matchday: null,
     utc_date: game.datetime,
-    status: game.status_state === 'final' ? 'FINISHED' : 'SCHEDULED',
-    // Pas de logo dans l'API balldontlie (plan gratuit) : on affiche juste
-    // le nom d'équipe, MatchCard gère déjà l'absence de crest proprement.
-    home_team: game.home_team?.name ?? 'TBD',
-    home_crest: null,
-    away_team: game.visitor_team?.name ?? 'TBD',
-    away_crest: null,
+    status: mapGameStatus(game),
+    home_team: homeTeam?.name ?? game.home_team?.name ?? 'TBD',
+    home_crest: homeTeam?.crest ?? null,
+    away_team: awayTeam?.name ?? game.visitor_team?.name ?? 'TBD',
+    away_crest: awayTeam?.crest ?? null,
     home_score: game.home_team_score || null,
     away_score: game.visitor_team_score || null,
     fetched_at: new Date().toISOString(),

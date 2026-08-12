@@ -1,5 +1,8 @@
-import { format, isPast } from 'date-fns'
+import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
+import CheckIcon from './CheckIcon'
+import { getRaceStatus, canMarkWatched } from '../lib/eventStatus'
+import { F1_META } from '../data/leagues'
 
 const SESSION_LABELS = { Practice: 'Essais', Qualifying: 'Qualifs', Sprint: 'Sprint', Race: 'Course' }
 
@@ -25,13 +28,22 @@ export default function RaceList({ races, watchedIds, onToggleWatched }) {
 }
 
 function RaceCard({ race, watched, onToggle }) {
-  const finished = isPast(new Date(race.date_end))
+  const status = getRaceStatus(race)
   // Les essais libres comptent peu pour un fan casual : on met en avant
   // seulement qualifs/sprint/course.
   const keySessions = race.sessions.filter((s) => s.type !== 'Practice')
 
   return (
-    <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-panel)] p-4">
+    <div
+      className={`rounded-xl border bg-[var(--color-panel)] p-4 transition-colors ${
+        status === 'cancelled'
+          ? 'border-[var(--color-border)] opacity-60'
+          : watched
+            ? 'border-emerald-500/30 bg-emerald-500/[0.04]'
+            : 'border-[var(--color-border)]'
+      }`}
+      style={{ borderLeft: `3px solid ${F1_META.color}` }}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           {race.country_flag && (
@@ -40,7 +52,18 @@ function RaceCard({ race, watched, onToggle }) {
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <p className="truncate font-semibold text-white">{race.name}</p>
-              {finished && (
+              {status === 'cancelled' && (
+                <span className="shrink-0 rounded-full bg-red-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase text-red-400">
+                  Annulée
+                </span>
+              )}
+              {status === 'live' && (
+                <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-red-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase text-red-400">
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-400" />
+                  Live
+                </span>
+              )}
+              {status === 'completed' && (
                 <span className="shrink-0 rounded-full bg-[var(--color-panel-2)] px-2 py-0.5 text-[10px] text-[var(--color-text-dim)]">
                   Terminée
                 </span>
@@ -50,27 +73,33 @@ function RaceCard({ race, watched, onToggle }) {
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={() => onToggle(race)}
-          className={`shrink-0 rounded-full px-3 py-1.5 text-sm font-medium transition ${
-            watched
-              ? 'bg-emerald-500 text-white'
-              : 'bg-[var(--color-panel-2)] text-[var(--color-text-dim)] hover:text-white'
-          }`}
-        >
-          {watched ? '✓ Vu' : 'Marquer vu'}
-        </button>
+        {canMarkWatched(status) && (
+          <button
+            type="button"
+            onClick={() => onToggle(race)}
+            className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-all ${
+              watched
+                ? 'animate-watched-pop bg-emerald-500 text-white'
+                : 'bg-[var(--color-panel-2)] text-[var(--color-text-dim)] hover:text-white'
+            }`}
+          >
+            <CheckIcon filled={watched} />
+            <span className="hidden sm:inline">{watched ? 'Vu' : 'Marquer vu'}</span>
+          </button>
+        )}
       </div>
 
       <div className="mt-3 flex flex-wrap gap-2">
         {keySessions.map((s) => (
           <div
             key={s.name}
-            className="rounded-lg bg-[var(--color-panel-2)] px-2.5 py-1 text-xs text-[var(--color-text-dim)]"
+            className={`rounded-lg bg-[var(--color-panel-2)] px-2.5 py-1 text-xs text-[var(--color-text-dim)] ${
+              s.is_cancelled ? 'line-through opacity-50' : ''
+            }`}
           >
             <span className="font-medium text-white">{SESSION_LABELS[s.type] ?? s.type}</span>{' '}
             {format(new Date(s.date_start), 'EEE d MMM · HH:mm', { locale: fr })}
+            {s.is_cancelled && ' (annulée)'}
           </div>
         ))}
       </div>
