@@ -1,21 +1,29 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
+import { format } from 'date-fns'
+import { fr } from 'date-fns/locale'
 import { supabase } from '../lib/supabaseClient'
+import { useUser } from '../context/UserContext'
+import { deleteCustomMatch } from '../lib/customMatches'
 import { LEAGUES, F1_META } from '../data/leagues'
 import teams from '../data/teams.json'
 import LeagueBadge from '../components/LeagueBadge'
 import LeagueBarChart from '../components/LeagueBarChart'
 import TeamLogo from '../components/TeamLogo'
 import CardSkeleton from '../components/CardSkeleton'
+import AddCustomMatchModal from '../components/AddCustomMatchModal'
 
 export default function UserDetailPage() {
   const { pseudo } = useParams()
+  const { user: loggedInUser } = useUser()
   const [user, setUser] = useState(null)
   const [watched, setWatched] = useState([])
   const [racesWatchedCount, setRacesWatchedCount] = useState(0)
+  const [customMatches, setCustomMatches] = useState([])
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
   const [leagueFilter, setLeagueFilter] = useState('ALL')
+  const [modalOpen, setModalOpen] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -39,7 +47,7 @@ export default function UserDetailPage() {
       setUser(userRow)
 
       // Jointure via la clé étrangère watched_matches.match_id -> matches_cache.id
-      const [{ data: watchedRows }, { count: racesCount }] = await Promise.all([
+      const [{ data: watchedRows }, { count: racesCount }, { data: customRows }] = await Promise.all([
         supabase
           .from('watched_matches')
           .select('*, matches_cache(*)')
@@ -49,11 +57,17 @@ export default function UserDetailPage() {
           .from('watched_races')
           .select('*', { count: 'exact', head: true })
           .eq('user_id', userRow.id),
+        supabase
+          .from('custom_matches')
+          .select('*')
+          .eq('user_id', userRow.id)
+          .order('created_at', { ascending: false }),
       ])
 
       if (!cancelled) {
         setWatched(watchedRows ?? [])
         setRacesWatchedCount(racesCount ?? 0)
+        setCustomMatches(customRows ?? [])
         setLoading(false)
       }
     }
@@ -63,6 +77,8 @@ export default function UserDetailPage() {
       cancelled = true
     }
   }, [pseudo])
+
+  const isOwnProfile = Boolean(loggedInUser && user && loggedInUser.id === user.id)
 
   const counts = useMemo(
     () => [
@@ -87,7 +103,16 @@ export default function UserDetailPage() {
     [user],
   )
 
-  const totalWatched = watched.length + racesWatchedCount
+  const totalWatched = watched.length + racesWatchedCount + customMatches.length
+
+  function handleCustomMatchAdded(row) {
+    setCustomMatches((prev) => [row, ...prev])
+  }
+
+  function handleDeleteCustomMatch(id) {
+    setCustomMatches((prev) => prev.filter((c) => c.id !== id))
+    deleteCustomMatch(id).catch(() => {})
+  }
 
   if (loading) {
     return (
@@ -129,12 +154,71 @@ export default function UserDetailPage() {
         </div>
       </div>
 
+      {isOwnProfile && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setModalOpen(true)}
+            className="rounded-lg bg-emerald-500 px-3.5 py-1.5 text-sm font-semibold text-white transition hover:bg-emerald-400"
+          >
+            + Ajouter un match
+          </button>
+          <Link
+            to="/parametres"
+            className="rounded-lg border border-[var(--color-border)] px-3.5 py-1.5 text-sm text-[var(--color-text-dim)] transition hover:text-white"
+          >
+            ⚙️ Modifier mon profil
+          </Link>
+        </div>
+      )}
+
       <section className="mt-6 rounded-xl border border-[var(--color-border)] bg-[var(--color-panel)] p-4">
         <h2 className="mb-3 text-sm font-semibold text-[var(--color-text-dim)]">
           Répartition par compétition
         </h2>
         <LeagueBarChart counts={counts} />
       </section>
+
+      {customMatches.length > 0 && (
+        <section className="mt-6">
+          <h2 className="mb-3 text-sm font-semibold text-[var(--color-text-dim)]">
+            Matchs ajoutés manuellement ({customMatches.length})
+          </h2>
+          <div className="space-y-2">
+            {customMatches.map((c) => {
+              const homeCrest = teams.find((t) => t.name === c.home_team)?.crest
+              const awayCrest = teams.find((t) => t.name === c.away_team)?.crest
+              return (
+                <div
+                  key={c.id}
+                  className="flex items-center gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-panel)] p-3"
+                >
+                  <TeamLogo src={homeCrest} name={c.home_team} size="xs" />
+                  <span className="truncate text-sm text-white">{c.home_team}</span>
+                  <span className="shrink-0 text-xs text-[var(--color-text-dim)]">vs</span>
+                  <span className="truncate text-sm text-white">{c.away_team}</span>
+                  <TeamLogo src={awayCrest} name={c.away_team} size="xs" />
+                  {c.played_on && (
+                    <span className="ml-auto shrink-0 text-xs text-[var(--color-text-dim)]">
+                      {format(new Date(c.played_on), 'd MMM yyyy', { locale: fr })}
+                    </span>
+                  )}
+                  {isOwnProfile && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteCustomMatch(c.id)}
+                      title="Supprimer"
+                      className="shrink-0 text-[var(--color-text-dim)] transition hover:text-red-400"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </section>
+      )}
 
       <div className="mt-6 flex flex-wrap gap-2">
         <button
@@ -193,6 +277,15 @@ export default function UserDetailPage() {
           </p>
         )}
       </div>
+
+      {isOwnProfile && (
+        <AddCustomMatchModal
+          open={modalOpen}
+          onClose={() => setModalOpen(false)}
+          userId={loggedInUser.id}
+          onAdded={handleCustomMatchAdded}
+        />
+      )}
     </div>
   )
 }

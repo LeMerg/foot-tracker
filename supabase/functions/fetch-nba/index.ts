@@ -99,9 +99,22 @@ function mapGameStatus(game: any): string {
   return 'SCHEDULED'
 }
 
+// Le score quart-temps par quart-temps est déjà présent dans la réponse
+// balldontlie qu'on récupère de toute façon pour la liste des matchs —
+// aucun appel API supplémentaire, juste arrêter de le jeter à la trappe.
+// Tous null tant que le match n'a pas commencé.
+function periodsFor(prefix: 'home' | 'visitor', game: any): number[] {
+  return [`${prefix}_q1`, `${prefix}_q2`, `${prefix}_q3`, `${prefix}_q4`, `${prefix}_ot1`, `${prefix}_ot2`, `${prefix}_ot3`]
+    .map((k) => game[k])
+    .filter((v) => v !== null && v !== undefined)
+}
+
 function mapGameToRow(game: any) {
   const homeTeam = NBA_TEAMS[game.home_team?.id]
   const awayTeam = NBA_TEAMS[game.visitor_team?.id]
+
+  const homePeriods = periodsFor('home', game)
+  const awayPeriods = periodsFor('visitor', game)
 
   return {
     external_id: game.id,
@@ -116,6 +129,7 @@ function mapGameToRow(game: any) {
     away_crest: awayTeam?.crest ?? null,
     home_score: game.home_team_score || null,
     away_score: game.visitor_team_score || null,
+    details: homePeriods.length || awayPeriods.length ? { periods: { home: homePeriods, away: awayPeriods } } : null,
     fetched_at: new Date().toISOString(),
   }
 }

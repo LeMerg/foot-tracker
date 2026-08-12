@@ -1,4 +1,4 @@
-# ⚽ Foot Tracker
+# 🏆 FanLog
 
 Site privé (toi + tes amis) qui regroupe le calendrier des 5 grands championnats
 européens (Premier League, La Liga, Bundesliga, Ligue 1, Serie A), de la
@@ -78,15 +78,20 @@ supabase secrets set FOOTBALL_DATA_API_KEY=ta_cle_football-data
 supabase secrets set BALLDONTLIE_API_KEY=ta_cle_balldontlie
 # (pas de clé nécessaire pour OpenF1, l'API F1 est ouverte)
 
-# 4. Déploie les 3 fonctions
+# 4. Déploie les 4 fonctions
 supabase functions deploy fetch-matches
 supabase functions deploy fetch-nba
 supabase functions deploy fetch-races
+supabase functions deploy fetch-match-detail
 ```
 
 Le fichier [`supabase/config.toml`](supabase/config.toml) désactive déjà la
-vérification JWT pour ces 3 fonctions (elles ne font rien de sensible :
-elles ne font que déclencher un rafraîchissement des caches publics).
+vérification JWT pour ces 4 fonctions (elles ne font rien de sensible :
+elles ne font que déclencher un rafraîchissement des caches publics, ou
+récupérer le détail d'un match déjà terminé). `fetch-match-detail` ne
+tourne jamais toute seule (pas de rafraîchissement en masse) : elle ne
+s'appelle qu'au clic sur un match déjà joué, et cache son résultat de
+façon permanente une fois récupéré.
 
 **Rafraîchissement automatique (optionnel)** : par défaut, chaque fonction se
 déclenche à chaque ouverture du calendrier par un utilisateur (et se

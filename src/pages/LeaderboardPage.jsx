@@ -1,23 +1,24 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import teams from '../data/teams.json'
 import TeamLogo from '../components/TeamLogo'
 import CardSkeleton from '../components/CardSkeleton'
+import { RANK_STYLES, MEDALS } from '../data/rankStyles'
 
-const MEDALS = ['🥇', '🥈', '🥉']
-
-// Traitement visuel distinct pour le podium (section 12 : "qui regarde le
-// plus" doit se lire d'un coup d'œil), le reste garde un style neutre.
-const RANK_STYLES = [
-  'border-amber-500/40 bg-gradient-to-r from-amber-500/[0.07] to-transparent',
-  'border-slate-400/30 bg-gradient-to-r from-slate-400/[0.06] to-transparent',
-  'border-orange-700/40 bg-gradient-to-r from-orange-700/[0.07] to-transparent',
+const FILTERS = [
+  { id: 'all', label: 'Tout', metric: 'total_watched', color: '#10b981', description: 'Qui a vu le plus de contenu (foot, NBA, F1) au total.' },
+  { id: 'football', label: '⚽ Foot', metric: 'football_watched', color: '#10b981', description: 'Qui a vu le plus de matchs de foot (calendrier + ajoutés manuellement).' },
+  { id: 'basketball', label: '🏀 NBA', metric: 'basketball_watched', color: '#f97316', description: 'Qui a vu le plus de matchs NBA.' },
+  { id: 'f1', label: '🏎️ F1', metric: 'f1_watched', color: '#e10600', description: 'Qui a vu le plus de courses F1.' },
 ]
 
 export default function LeaderboardPage() {
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
+  const [filterId, setFilterId] = useState('all')
+
+  const activeFilter = FILTERS.find((f) => f.id === filterId)
 
   useEffect(() => {
     let cancelled = false
@@ -37,21 +38,46 @@ export default function LeaderboardPage() {
     }
   }, [])
 
+  const sortedRows = useMemo(
+    () =>
+      [...rows].sort(
+        (a, b) => b[activeFilter.metric] - a[activeFilter.metric] || a.pseudo.localeCompare(b.pseudo),
+      ),
+    [rows, activeFilter],
+  )
+
   return (
     <div className="mx-auto max-w-2xl px-4 py-6">
       <h1 className="text-2xl font-bold text-white">Classement</h1>
-      <p className="mt-1 text-sm text-[var(--color-text-dim)]">
-        Qui a vu le plus de contenu (foot, NBA, F1) au total.
-      </p>
+      <p className="mt-1 text-sm text-[var(--color-text-dim)]">{activeFilter.description}</p>
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        {FILTERS.map((filter) => (
+          <button
+            key={filter.id}
+            type="button"
+            onClick={() => setFilterId(filter.id)}
+            className={`rounded-lg px-3.5 py-1.5 text-sm font-semibold transition-all ${
+              filterId === filter.id
+                ? 'text-white shadow-md'
+                : 'bg-[var(--color-panel-2)] text-[var(--color-text-dim)] hover:text-white'
+            }`}
+            style={{ backgroundColor: filterId === filter.id ? filter.color : undefined }}
+          >
+            {filter.label}
+          </button>
+        ))}
+      </div>
 
       {loading && <CardSkeleton />}
 
       <div className="mt-6 space-y-2">
-        {rows.map((row, index) => {
+        {sortedRows.map((row, index) => {
           const team = teams.find(
             (t) => t.name === row.favorite_team && t.league === row.favorite_league,
           )
           const rankStyle = RANK_STYLES[index]
+          const value = row[activeFilter.metric]
           return (
             <Link
               key={row.user_id}
@@ -74,16 +100,14 @@ export default function LeaderboardPage() {
               </div>
 
               <div className="shrink-0 text-right">
-                <p className="text-lg font-bold text-emerald-400">{row.total_watched}</p>
-                <p className="text-xs text-[var(--color-text-dim)]">
-                  vu{row.total_watched > 1 ? 's' : ''}
-                </p>
+                <p className="text-lg font-bold" style={{ color: activeFilter.color }}>{value}</p>
+                <p className="text-xs text-[var(--color-text-dim)]">vu{value > 1 ? 's' : ''}</p>
               </div>
             </Link>
           )
         })}
 
-        {!loading && rows.length === 0 && (
+        {!loading && sortedRows.length === 0 && (
           <p className="text-[var(--color-text-dim)]">Personne n’a encore de pseudo, sois le premier !</p>
         )}
       </div>

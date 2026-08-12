@@ -166,9 +166,10 @@ export default function CalendarPage() {
             onClick={() => handleSportChange(s.id)}
             className={`rounded-lg px-3.5 py-1.5 text-sm font-semibold transition-all ${
               sport === s.id
-                ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/20'
+                ? 'text-white shadow-md'
                 : 'bg-[var(--color-panel-2)] text-[var(--color-text-dim)] hover:text-white'
             }`}
+            style={{ backgroundColor: sport === s.id ? s.color : undefined }}
           >
             {s.label}
           </button>

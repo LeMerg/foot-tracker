@@ -1,18 +1,27 @@
+import { useState } from 'react'
 import { format } from 'date-fns'
 import LeagueBadge from './LeagueBadge'
 import TeamLogo from './TeamLogo'
 import CheckIcon from './CheckIcon'
-import { getMatchStatus, canMarkWatched } from '../lib/eventStatus'
+import MatchDetailModal from './MatchDetailModal'
+import { getMatchStatus, canMarkWatched, hasResult } from '../lib/eventStatus'
 import { LEAGUE_BY_CODE } from '../data/leagues'
 
 export default function MatchCard({ match, watched, onToggleWatched }) {
+  const [open, setOpen] = useState(false)
   const status = getMatchStatus(match)
   const cancelled = status === 'cancelled'
   const league = LEAGUE_BY_CODE[match.league]
+  const clickable = hasResult(status)
 
   return (
     <div
+      onClick={() => clickable && setOpen(true)}
+      role={clickable ? 'button' : undefined}
+      tabIndex={clickable ? 0 : undefined}
       className={`flex items-center gap-3 rounded-xl border bg-[var(--color-panel)] py-3 pl-3 pr-3 transition-colors ${
+        clickable ? 'cursor-pointer hover:border-white/20' : ''
+      } ${
         cancelled
           ? 'border-[var(--color-border)] opacity-60'
           : watched
@@ -59,7 +68,10 @@ export default function MatchCard({ match, watched, onToggleWatched }) {
       {canMarkWatched(status) && (
         <button
           type="button"
-          onClick={() => onToggleWatched(match)}
+          onClick={(e) => {
+            e.stopPropagation()
+            onToggleWatched(match)
+          }}
           title={watched ? 'Marquer comme non vu' : 'Marquer comme vu'}
           aria-pressed={watched}
           className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-all ${
@@ -72,6 +84,8 @@ export default function MatchCard({ match, watched, onToggleWatched }) {
           <span className="hidden sm:inline">{watched ? 'Vu' : 'Marquer vu'}</span>
         </button>
       )}
+
+      {open && <MatchDetailModal match={match} onClose={() => setOpen(false)} />}
     </div>
   )
 }

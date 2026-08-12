@@ -29,3 +29,18 @@ export function triggerMatchesRefresh() {
     // le calendrier reste simplement vide jusqu'au déploiement (voir README).
   })
 }
+
+// Détail d'un match déjà joué (score mi-temps/arbitre pour le foot, déjà
+// caché en base après un premier appel ; quart-temps pour la NBA, déjà
+// présent sur la ligne). null si rien à montrer (NBA sans quart-temps —
+// le match n'a pas encore commencé, incohérent avec un clic possible mais
+// gardé par sécurité).
+export async function fetchMatchDetail(match) {
+  if (match.details) return match.details
+  if (match.sport !== 'football') return null
+  const { data, error } = await supabase.functions.invoke('fetch-match-detail', {
+    body: { id: match.id },
+  })
+  if (error) throw error
+  return data
+}

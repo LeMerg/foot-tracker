@@ -72,6 +72,7 @@ Deno.serve(async (req) => {
     for (const s of sessions as any[]) {
       const list = sessionsByMeeting.get(s.meeting_key) ?? []
       list.push({
+        session_key: s.session_key,
         type: s.session_type,
         name: s.session_name,
         date_start: s.date_start,

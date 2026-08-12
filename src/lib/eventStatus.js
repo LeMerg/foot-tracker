@@ -61,3 +61,9 @@ export const STATUS_LABELS = {
 export function canMarkWatched(status) {
   return status !== 'cancelled' && status !== 'postponed'
 }
+
+// Un match/session a un résultat affichable (en cours ou terminé) — sert à
+// décider si une carte/chip devient cliquable pour ouvrir le détail.
+export function hasResult(status) {
+  return status === 'completed' || status === 'live'
+}

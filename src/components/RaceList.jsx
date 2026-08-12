@@ -1,7 +1,9 @@
+import { useState } from 'react'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import CheckIcon from './CheckIcon'
-import { getRaceStatus, canMarkWatched } from '../lib/eventStatus'
+import SessionResultModal from './SessionResultModal'
+import { getRaceStatus, getSessionStatus, canMarkWatched, hasResult } from '../lib/eventStatus'
 import { F1_META } from '../data/leagues'
 
 const SESSION_LABELS = { Practice: 'Essais', Qualifying: 'Qualifs', Sprint: 'Sprint', Race: 'Course' }
@@ -28,6 +30,7 @@ export default function RaceList({ races, watchedIds, onToggleWatched }) {
 }
 
 function RaceCard({ race, watched, onToggle }) {
+  const [openSession, setOpenSession] = useState(null)
   const status = getRaceStatus(race)
   // Les essais libres comptent peu pour un fan casual : on met en avant
   // seulement qualifs/sprint/course.
@@ -90,19 +93,27 @@ function RaceCard({ race, watched, onToggle }) {
       </div>
 
       <div className="mt-3 flex flex-wrap gap-2">
-        {keySessions.map((s) => (
-          <div
-            key={s.name}
-            className={`rounded-lg bg-[var(--color-panel-2)] px-2.5 py-1 text-xs text-[var(--color-text-dim)] ${
-              s.is_cancelled ? 'line-through opacity-50' : ''
-            }`}
-          >
-            <span className="font-medium text-white">{SESSION_LABELS[s.type] ?? s.type}</span>{' '}
-            {format(new Date(s.date_start), 'EEE d MMM · HH:mm', { locale: fr })}
-            {s.is_cancelled && ' (annulée)'}
-          </div>
-        ))}
+        {keySessions.map((s) => {
+          const clickable = hasResult(getSessionStatus(s)) && s.session_key != null
+          return (
+            <div
+              key={s.name}
+              onClick={() => clickable && setOpenSession(s)}
+              className={`rounded-lg bg-[var(--color-panel-2)] px-2.5 py-1 text-xs text-[var(--color-text-dim)] ${
+                s.is_cancelled ? 'line-through opacity-50' : ''
+              } ${clickable ? 'cursor-pointer hover:bg-[var(--color-border)]' : ''}`}
+            >
+              <span className="font-medium text-white">{SESSION_LABELS[s.type] ?? s.type}</span>{' '}
+              {format(new Date(s.date_start), 'EEE d MMM · HH:mm', { locale: fr })}
+              {s.is_cancelled && ' (annulée)'}
+            </div>
+          )
+        })}
       </div>
+
+      {openSession && (
+        <SessionResultModal session={openSession} raceName={race.name} onClose={() => setOpenSession(null)} />
+      )}
     </div>
   )
 }
