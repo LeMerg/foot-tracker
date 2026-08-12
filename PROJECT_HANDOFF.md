@@ -20,21 +20,24 @@ chacun peut marquer ce qu'il a "vu" et comparer son total avec ses potes.
 
 ## 2. ⚠️ ÉTAT ACTUEL — À LIRE EN PREMIER
 
-**Une grosse quantité de travail est faite, vérifiée, mais PAS ENCORE
-committée/poussée/déployée**, à la demande explicite de l'utilisateur qui
-voulait d'abord la revoir. C'est le point le plus important de ce document.
+**Mise à jour : le travail décrit ci-dessous a été validé par
+l'utilisateur, commité (`cb730d1`), poussé sur GitHub, et déployé sur
+Cloudflare Pages. Le site en ligne est à jour.** Cette section garde
+l'historique de ce qui a changé, pour mémoire.
 
-### Ce qui est EN LIGNE actuellement (dernier commit poussé : `76b976a`)
+### Ce qui est EN LIGNE actuellement (dernier commit poussé : `cb730d1`)
 
 - Foot (5 championnats + Ligue des Champions), NBA, F1 : calendrier,
   "marquer vu", classement, page profil.
 - Onboarding pseudo + reconnexion multi-appareils ("J'ai déjà un pseudo").
-- **Design "V1"** : cartes de match simples (bordure uniforme, pas d'accent
-  par ligue), pas de badges de statut (annulé/reporté/en direct), logos NBA
-  déjà visibles (le backend qui les fournit est en avance sur le frontend
-  déployé, voir plus bas) mais avec l'ancien style de carte.
+- Logos NBA corrects, statuts d'événements (annulé/reporté/en direct),
+  trigger anti double-comptage, modale "Quoi de neuf".
+- Polish visuel : accent de couleur par ligue, animation "marquer vu",
+  podium sur le classement, nav avec avatar, états de chargement skeleton.
+- Vérifié en production : `https://foot-tracker.pages.dev` sert bien le
+  nouveau build (`assets/index-CdXwheEj.js`), site répond 200.
 
-### Ce qui est fait en LOCAL mais PAS déployé/committé
+### Ce qui avait été fait en local avant validation (maintenant en ligne)
 
 Deux passes de travail, toutes deux **vérifiées et fonctionnelles en local**
 (build OK, testé dans le navigateur contre la vraie base Supabase), mais
