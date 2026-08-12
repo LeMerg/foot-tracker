@@ -31,7 +31,7 @@ export default function LeaderboardPage() {
     <div className="mx-auto max-w-2xl px-4 py-6">
       <h1 className="text-2xl font-bold text-white">Classement</h1>
       <p className="mt-1 text-sm text-[var(--color-text-dim)]">
-        Qui a vu le plus de matchs parmi les 5 grands championnats.
+        Qui a vu le plus de contenu (foot, NBA, F1) au total.
       </p>
 
       {loading && <p className="mt-6 text-[var(--color-text-dim)]">Chargement…</p>}

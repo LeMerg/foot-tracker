@@ -1,15 +1,19 @@
 # ⚽ Foot Tracker
 
 Site privé (toi + tes amis) qui regroupe le calendrier des 5 grands championnats
-européens (Premier League, La Liga, Bundesliga, Ligue 1, Serie A) et de la
-Ligue des Champions, avec pseudo, suivi des matchs vus et classement.
+européens (Premier League, La Liga, Bundesliga, Ligue 1, Serie A), de la
+Ligue des Champions, de la **NBA** et de la **Formule 1** — avec pseudo,
+suivi de ce que tu as vu, et classement.
 
-> L'Europa League n'est pas incluse : elle n'est pas disponible sur le plan
-> gratuit de football-data.org (voir section 5 "Limites connues").
+> L'Europa League et l'UFC/MMA ne sont pas (encore) inclus : pas de source de
+> données gratuite fiable trouvée pour l'instant (voir section 5 "Limites
+> connues").
 
 **Stack** : React (Vite) + Tailwind CSS + Supabase (base de données/API +
-Edge Function) + données [football-data.org](https://www.football-data.org/).
-Site 100% statique, hébergeable gratuitement sur GitHub Pages.
+Edge Functions) + données [football-data.org](https://www.football-data.org/)
+(foot), [balldontlie.io](https://balldontlie.io) (NBA) et
+[OpenF1](https://openf1.org) (F1). Site 100% statique, hébergeable
+gratuitement sur GitHub Pages (ou Cloudflare Pages, voir section 3.4).
 
 ---
 
@@ -39,21 +43,23 @@ cp .env.example .env
 2. Colle tout le contenu de [`supabase/schema.sql`](supabase/schema.sql).
 3. Clique **Run**.
 
-Ça crée 3 tables (`users`, `watched_matches`, `matches_cache`), une vue
-(`leaderboard`) et les policies de sécurité (Row Level Security). Voir les
-commentaires dans le fichier pour le détail des choix de sécurité :
-en résumé, `users` et `watched_matches` sont en "honor system" (pas de mot de
-passe = pas de vraie authentification, donc n'importe qui avec la clé
-publique pourrait modifier ces données — acceptable pour un site privé entre
-amis de confiance), alors que `matches_cache` (le calendrier des matchs)
-n'est modifiable que par l'Edge Function, jamais par le frontend.
+Ça crée les tables (`users`, `watched_matches`, `matches_cache`,
+`watched_races`, `races_cache`), une vue (`leaderboard`, qui combine les
+matchs foot/NBA et les courses F1 dans un seul total) et les policies de
+sécurité (Row Level Security). Voir les commentaires dans le fichier pour le
+détail des choix de sécurité : en résumé, `users`, `watched_matches` et
+`watched_races` sont en "honor system" (pas de mot de passe = pas de vraie
+authentification, donc n'importe qui avec la clé publique pourrait modifier
+ces données — acceptable pour un site privé entre amis de confiance), alors
+que `matches_cache`/`races_cache` (les calendriers) ne sont modifiables que
+par les Edge Functions, jamais par le frontend.
 
-### 1.3 Déployer l'Edge Function (récupération des matchs)
+### 1.3 Déployer les Edge Functions (récupération des matchs/courses)
 
-La clé `football-data.org` ne doit **jamais** être dans le code frontend
-(sinon n'importe qui peut la lire et l'utiliser à ta place). Elle vit donc
-uniquement dans une Edge Function Supabase, appelée par le frontend, qui va
-elle-même interroger football-data.org et remplir `matches_cache`.
+Les clés des API externes ne doivent **jamais** être dans le code frontend
+(sinon n'importe qui peut les lire et les utiliser à ta place). Elles vivent
+donc uniquement dans des Edge Functions Supabase, appelées par le frontend,
+qui interrogent elles-mêmes les API et remplissent `matches_cache`/`races_cache`.
 
 Installe la [Supabase CLI](https://supabase.com/docs/guides/cli/getting-started)
 puis, depuis la racine du projet :
@@ -67,22 +73,26 @@ supabase login
 #    ou dans ton Project URL: https://<ref>.supabase.co)
 supabase link --project-ref njbfshxkismqikjzvrbm
 
-# 3. Enregistre ta clé football-data.org comme secret (jamais dans le code)
-supabase secrets set FOOTBALL_DATA_API_KEY=ta_cle_ici
+# 3. Enregistre tes clés comme secrets (jamais dans le code)
+supabase secrets set FOOTBALL_DATA_API_KEY=ta_cle_football-data
+supabase secrets set BALLDONTLIE_API_KEY=ta_cle_balldontlie
+# (pas de clé nécessaire pour OpenF1, l'API F1 est ouverte)
 
-# 4. Déploie la fonction
+# 4. Déploie les 3 fonctions
 supabase functions deploy fetch-matches
+supabase functions deploy fetch-nba
+supabase functions deploy fetch-races
 ```
 
 Le fichier [`supabase/config.toml`](supabase/config.toml) désactive déjà la
-vérification JWT pour cette fonction précise (elle ne fait rien de sensible :
-elle ne fait que déclencher un rafraîchissement du cache public).
+vérification JWT pour ces 3 fonctions (elles ne font rien de sensible :
+elles ne font que déclencher un rafraîchissement des caches publics).
 
-**Rafraîchissement automatique (optionnel)** : par défaut, la fonction se
+**Rafraîchissement automatique (optionnel)** : par défaut, chaque fonction se
 déclenche à chaque ouverture du calendrier par un utilisateur (et se
-throttle elle-même à 1 vrai appel externe toutes les 6h par ligue). Si tu
-veux qu'elle tourne aussi toute seule même quand personne n'ouvre le site,
-va dans **Dashboard > Edge Functions > fetch-matches > Cron** et programme-la
+throttle elle-même à 1 vrai appel externe toutes les 6h). Si tu veux
+qu'elles tournent aussi toutes seules même quand personne n'ouvre le site,
+va dans **Dashboard > Edge Functions > (nom de la fonction) > Cron** et programme-la
 (ex: toutes les 6h).
 
 ---
@@ -166,17 +176,20 @@ surcharge le `base` de Vite via la variable `BASE_PATH` (voir
 ```
 foot-tracker/
 ├── src/
-│   ├── components/     # Composants réutilisables (calendrier, sélecteur d'équipe, badges…)
+│   ├── components/     # Composants réutilisables (calendrier, RaceList, sélecteur d'équipe, badges…)
 │   ├── pages/           # Une page = une route (calendrier, classement, détails, paramètres)
 │   ├── context/          # UserContext : qui est connecté (pseudo courant)
-│   ├── hooks/            # useWatchedMatches : gère les matchs "vus"
-│   ├── lib/               # Clients/fonctions partagées (Supabase, fetch des matchs)
-│   └── data/              # leagues.js (métadonnées des 5 championnats), teams.json (généré)
+│   ├── hooks/            # useWatchedMatches (foot+NBA), useWatchedRaces (F1)
+│   ├── lib/               # Clients/fonctions partagées (Supabase, fetch des matchs/courses)
+│   └── data/              # sports.js (onglets), leagues.js (ligues), teams.json (généré, foot only)
 ├── supabase/
-│   ├── schema.sql        # Script SQL à exécuter dans le dashboard Supabase
-│   ├── config.toml       # Config de l'Edge Function
+│   ├── schema.sql        # Script SQL de référence (état initial, voir aussi migrations/)
+│   ├── migrations/        # Historique des changements de schéma appliqués
+│   ├── config.toml       # Config des Edge Functions
 │   └── functions/
-│       └── fetch-matches/ # Edge Function : va chercher les matchs sur football-data.org
+│       ├── fetch-matches/ # Va chercher les matchs foot sur football-data.org
+│       ├── fetch-nba/      # Va chercher les matchs NBA sur balldontlie.io
+│       └── fetch-races/    # Va chercher le calendrier F1 sur OpenF1
 └── .github/workflows/deploy.yml # Déploiement automatique sur GitHub Pages
 ```
 
@@ -208,3 +221,14 @@ l'endpoint `/teams`).
   fin août), `matches_cache` ne contient que les matchs de la saison
   précédente. Ça se met à jour tout seul (cache 6h) dès que l'API publie les
   nouveaux matchs, sans rien à faire de ton côté.
+- **NBA** : `fetch-nba` ne récupère qu'une fenêtre glissante de ~90 jours à
+  venir (pas la saison entière, ~1230 matchs), pour rester rapide et large
+  sous les 5 requêtes/minute du plan gratuit balldontlie.io. L'API ne fournit
+  pas de logo d'équipe sur ce plan, donc les matchs NBA s'affichent sans crest
+  (juste le nom de l'équipe).
+- **UFC/MMA non disponible** : l'UFC n'a aucune API officielle publique.
+  Les seules alternatives trouvées sont des services tiers non établis ou du
+  scraping déguisé en API — pas d'option fiable et gratuite à ce jour.
+- **API-Football (api-sports.io)** volontairement pas utilisée pour le foot :
+  son plan gratuit ne couvre que les saisons 2022-2024, jamais la saison en
+  cours, ce qui ne convient pas à un calendrier "à venir".

@@ -1,5 +1,6 @@
 // Métadonnées des compétitions suivies par le site.
-// "code" = code compétition football-data.org (utilisé partout comme identifiant).
+// "code" = valeur stockée dans matches_cache.league (identifiant utilisé
+// partout : filtres, badges, classement par compétition).
 
 // Les 5 grands championnats domestiques : utilisés pour le sélecteur
 // "équipe favorite" (une équipe appartient à UN championnat domestique,
@@ -17,8 +18,22 @@ export const CUP_LEAGUES = [
   { code: 'CL', name: 'Ligue des Champions', country: 'Europe', color: '#1a1464' },
 ]
 
-// Toutes les compétitions dont on affiche les matchs dans le calendrier
-// (filtre par ligue, badges, répartition par championnat...).
-export const LEAGUES = [...DOMESTIC_LEAGUES, ...CUP_LEAGUES]
+// Toutes les compétitions football dont on affiche les matchs dans le
+// calendrier (filtre par ligue, badges, répartition par championnat...).
+export const FOOTBALL_LEAGUES = [...DOMESTIC_LEAGUES, ...CUP_LEAGUES]
+
+// NBA : partage matches_cache/watched_matches avec le foot (même forme
+// "équipe A vs équipe B, un score"), donc traité comme une ligue de plus.
+export const BASKETBALL_LEAGUES = [
+  { code: 'NBA', name: 'NBA', country: 'États-Unis', color: '#1d428a' },
+]
+
+// Toutes les ligues "de type match" confondues (utilisé pour les badges et
+// la répartition par compétition sur la page profil).
+export const LEAGUES = [...FOOTBALL_LEAGUES, ...BASKETBALL_LEAGUES]
 
 export const LEAGUE_BY_CODE = Object.fromEntries(LEAGUES.map((l) => [l.code, l]))
+
+// F1 n'est pas une "league" de matches_cache (races_cache est un modèle à
+// part), mais garde une couleur cohérente pour son onglet et ses stats.
+export const F1_META = { code: 'F1', name: 'Formule 1', color: '#e10600' }

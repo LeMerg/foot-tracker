@@ -9,3 +9,9 @@ project_id = "foot-tracker"
 # laisse accessible sans JWT Supabase — ça évite aussi tout souci de
 # compatibilité avec le nouveau format de clé publique "sb_publishable_...".
 verify_jwt = false
+
+[functions.fetch-nba]
+verify_jwt = false
+
+[functions.fetch-races]
+verify_jwt = false

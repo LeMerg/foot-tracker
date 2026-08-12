@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
-import { LEAGUES } from '../data/leagues'
+import { LEAGUES, F1_META } from '../data/leagues'
 import teams from '../data/teams.json'
 import LeagueBadge from '../components/LeagueBadge'
 import LeagueBarChart from '../components/LeagueBarChart'
@@ -10,6 +10,7 @@ export default function UserDetailPage() {
   const { pseudo } = useParams()
   const [user, setUser] = useState(null)
   const [watched, setWatched] = useState([])
+  const [racesWatchedCount, setRacesWatchedCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
   const [leagueFilter, setLeagueFilter] = useState('ALL')
@@ -36,14 +37,21 @@ export default function UserDetailPage() {
       setUser(userRow)
 
       // Jointure via la clé étrangère watched_matches.match_id -> matches_cache.id
-      const { data: watchedRows } = await supabase
-        .from('watched_matches')
-        .select('*, matches_cache(*)')
-        .eq('user_id', userRow.id)
-        .order('watched_at', { ascending: false })
+      const [{ data: watchedRows }, { count: racesCount }] = await Promise.all([
+        supabase
+          .from('watched_matches')
+          .select('*, matches_cache(*)')
+          .eq('user_id', userRow.id)
+          .order('watched_at', { ascending: false }),
+        supabase
+          .from('watched_races')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', userRow.id),
+      ])
 
       if (!cancelled) {
         setWatched(watchedRows ?? [])
+        setRacesWatchedCount(racesCount ?? 0)
         setLoading(false)
       }
     }
@@ -55,14 +63,16 @@ export default function UserDetailPage() {
   }, [pseudo])
 
   const counts = useMemo(
-    () =>
-      LEAGUES.map((league) => ({
+    () => [
+      ...LEAGUES.map((league) => ({
         code: league.code,
         name: league.name,
         color: league.color,
         count: watched.filter((w) => w.league === league.code).length,
       })),
-    [watched],
+      { code: F1_META.code, name: F1_META.name, color: F1_META.color, count: racesWatchedCount },
+    ],
+    [watched, racesWatchedCount],
   )
 
   const filteredWatched = useMemo(
@@ -152,13 +162,13 @@ export default function UserDetailPage() {
               key={w.id}
               className="flex items-center gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-panel)] p-3"
             >
-              <img src={m.home_crest} alt="" className="h-5 w-5 shrink-0 object-contain" />
+              {m.home_crest && <img src={m.home_crest} alt="" className="h-5 w-5 shrink-0 object-contain" />}
               <span className="truncate text-sm text-white">{m.home_team}</span>
               <span className="shrink-0 text-xs text-[var(--color-text-dim)]">
                 {m.home_score ?? '-'} - {m.away_score ?? '-'}
               </span>
               <span className="truncate text-sm text-white">{m.away_team}</span>
-              <img src={m.away_crest} alt="" className="h-5 w-5 shrink-0 object-contain" />
+              {m.away_crest && <img src={m.away_crest} alt="" className="h-5 w-5 shrink-0 object-contain" />}
               <div className="ml-auto shrink-0">
                 <LeagueBadge code={w.league} />
               </div>

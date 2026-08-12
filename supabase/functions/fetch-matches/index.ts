@@ -76,7 +76,8 @@ async function fetchLeagueMatches(league: string) {
 
 function mapMatchToRow(match: any, league: string) {
   return {
-    id: match.id,
+    external_id: match.id,
+    sport: 'football',
     league,
     matchday: match.matchday ?? null,
     utc_date: match.utcDate,
@@ -117,8 +118,12 @@ Deno.serve(async (req) => {
       const rows = matches.map((m) => mapMatchToRow(m, league))
 
       // upsert : insère les nouveaux matchs, met à jour ceux déjà en cache
-      // (utile pour rafraîchir le score une fois le match terminé).
-      const { error } = await supabase.from('matches_cache').upsert(rows, { onConflict: 'id' })
+      // (utile pour rafraîchir le score une fois le match terminé). La cible
+      // de conflit est (sport, external_id), pas `id` — `id` est une clé
+      // technique auto-générée, indépendante des id de football-data.org.
+      const { error } = await supabase
+        .from('matches_cache')
+        .upsert(rows, { onConflict: 'sport,external_id' })
       if (error) throw error
 
       results.push({ league, status: 'refreshed', count: rows.length })
