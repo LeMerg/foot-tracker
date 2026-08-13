@@ -37,11 +37,25 @@ const WEBHOOKS: Record<'football' | 'basketball' | 'f1', string | undefined> = {
   f1: Deno.env.get('DISCORD_WEBHOOK_F1'),
 }
 
-async function postToDiscord(webhookUrl: string, content: string) {
+// Ids de rôle (pas des secrets, juste des identifiants propres à ce
+// serveur Discord) — pingés dans chaque message pour que les gens
+// reçoivent une vraie notification, pas juste un message silencieux.
+const ROLE_IDS: Record<'football' | 'basketball' | 'f1', string> = {
+  football: '1537483367715438694',
+  basketball: '1537483400418689114',
+  f1: '1537483427228553276',
+}
+
+async function postToDiscord(webhookUrl: string, content: string, roleId: string) {
   const res = await fetch(webhookUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ content }),
+    body: JSON.stringify({
+      content: `<@&${roleId}> ${content}`,
+      // Autorise explicitement le ping de CE rôle précis, plutôt que de
+      // compter sur le comportement par défaut de Discord.
+      allowed_mentions: { roles: [roleId] },
+    }),
   })
   if (!res.ok) throw new Error(`Discord a répondu ${res.status}`)
 }
@@ -99,7 +113,8 @@ Deno.serve(async (req) => {
     .is('notified_at', null)
 
   for (const m of matches ?? []) {
-    const webhook = m.sport === 'basketball' ? WEBHOOKS.basketball : WEBHOOKS.football
+    const sportKey = m.sport === 'basketball' ? 'basketball' : 'football'
+    const webhook = WEBHOOKS[sportKey]
     if (!webhook) {
       skipped.push(`match ${m.id} (${m.sport} : secret manquant)`)
       continue
@@ -110,7 +125,7 @@ Deno.serve(async (req) => {
     const content = `${emoji} **${m.home_team} ${m.home_score} - ${m.away_score} ${m.away_team}** (${competition}) est terminé ! Va le marquer comme vu sur FanLog 👉 ${SITE_URL}`
 
     try {
-      await postToDiscord(webhook, content)
+      await postToDiscord(webhook, content, ROLE_IDS[sportKey])
       matchesNotified += 1
     } catch (err) {
       skipped.push(`match ${m.id} : ${(err as Error).message}`)
@@ -140,7 +155,7 @@ Deno.serve(async (req) => {
       : `🏎️ **${r.name}** est terminée ! Le classement complet est dispo sur FanLog 👉 ${SITE_URL}`
 
     try {
-      await postToDiscord(WEBHOOKS.f1, content)
+      await postToDiscord(WEBHOOKS.f1, content, ROLE_IDS.f1)
       racesNotified += 1
     } catch (err) {
       skipped.push(`course ${r.id} : ${(err as Error).message}`)
