@@ -102,6 +102,34 @@ va dans **Dashboard > Edge Functions > (nom de la fonction) > Cron** et programm
 
 ---
 
+## 1.4 Notifications Discord (optionnel)
+
+Envoie un message dans Discord quand un match/une course se termine, pour
+rappeler d'aller le marquer "vu" — un salon séparé par sport (foot/NBA/F1).
+Un webhook Discord est juste une URL, pas besoin d'héberger un bot.
+
+```bash
+# 1. Pour chaque salon Discord : Paramètres du salon > Intégrations >
+#    Webhooks > Nouveau webhook > copier l'URL du webhook.
+
+# 2. Enregistre les 3 URLs comme secrets (jamais dans le code, jamais
+#    dans un chat) :
+supabase secrets set DISCORD_WEBHOOK_FOOTBALL=https://discord.com/api/webhooks/...
+supabase secrets set DISCORD_WEBHOOK_NBA=https://discord.com/api/webhooks/...
+supabase secrets set DISCORD_WEBHOOK_F1=https://discord.com/api/webhooks/...
+
+# 3. Déploie la fonction
+supabase functions deploy notify-discord
+```
+
+La migration (`supabase db push`) crée automatiquement un job planifié
+(`pg_cron`, toutes les 15 min) qui appelle cette fonction — rien à
+configurer dans le dashboard. Tu peux te contenter d'un seul des 3
+secrets si tu ne veux qu'un salon : les deux autres sports sont
+simplement ignorés jusqu'à ce que leur secret soit ajouté.
+
+---
+
 ## 2. Lancer le site en local
 
 ```bash

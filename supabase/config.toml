@@ -21,3 +21,6 @@ verify_jwt = false
 
 [functions.fetch-session-result]
 verify_jwt = false
+
+[functions.notify-discord]
+verify_jwt = false
