@@ -128,6 +128,14 @@ configurer dans le dashboard. Tu peux te contenter d'un seul des 3
 secrets si tu ne veux qu'un salon : les deux autres sports sont
 simplement ignorés jusqu'à ce que leur secret soit ajouté.
 
+**Salon "mises à jour du site"** : un 4e webhook, `DISCORD_WEBHOOK_UPDATES`,
+sert à annoncer les nouveautés du site (même contenu que la modale "Quoi
+de neuf" en jeu). Pas d'automatisation — pas de déclencheur "site déployé"
+dans cette architecture (site statique + Supabase) — c'est un envoi manuel
+(`curl -X POST $DISCORD_WEBHOOK_UPDATES -d '{"content": "..."}'`) à faire
+à chaque nouvelle version, en même temps qu'on bump `CHANGELOG_VERSION`
+dans `src/data/changelog.js`.
+
 ---
 
 ## 2. Lancer le site en local

@@ -26,12 +26,27 @@ export default function WhatsNewModal() {
       <div className="w-full max-w-md rounded-2xl border border-[var(--color-border)] bg-[var(--color-panel)] p-6 shadow-2xl">
         <h2 className="text-xl font-bold text-white">Quoi de neuf 🎉</h2>
         <ul className="mt-4 space-y-2 text-sm text-[var(--color-text-dim)]">
-          {CHANGELOG_ITEMS.map((item) => (
-            <li key={item} className="flex gap-2">
-              <span className="shrink-0">•</span>
-              <span>{item}</span>
-            </li>
-          ))}
+          {CHANGELOG_ITEMS.map((item, i) => {
+            const text = typeof item === 'string' ? item : item.text
+            const href = typeof item === 'string' ? null : item.href
+            return (
+              <li key={i} className="flex gap-2">
+                <span className="shrink-0">•</span>
+                {href ? (
+                  <a
+                    href={href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-emerald-400 underline hover:text-emerald-300"
+                  >
+                    {text}
+                  </a>
+                ) : (
+                  <span>{text}</span>
+                )}
+              </li>
+            )
+          })}
         </ul>
         <button
           type="button"
