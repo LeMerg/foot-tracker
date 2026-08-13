@@ -20,7 +20,7 @@ chacun peut marquer ce qu'il a "vu" et comparer son total avec ses potes.
 
 ## 2. ⚠️ ÉTAT ACTUEL — À LIRE EN PREMIER
 
-**Tout est validé, commité (`946855c`), poussé sur GitHub, et déployé sur
+**Tout est validé, commité (`ee91e71`), poussé sur GitHub, et déployé sur
 Cloudflare Pages. Le site en ligne est à jour, migrations et Edge Functions
 comprises.** Aucune action en attente.
 
@@ -48,7 +48,12 @@ comprises.** Aucune action en attente.
 - Renommage **Foot Tracker → FanLog** (titre, logo nav, README) — l'URL
   (`foot-tracker.pages.dev`), le repo GitHub et le projet Cloudflare
   gardent leur nom technique, volontairement inchangé.
-- Modale "Quoi de neuf" à jour (`CHANGELOG_VERSION = '2026-08-v4'`),
+- Détail au clic disponible aussi sur la page profil (pas seulement le
+  calendrier), résumé perso (équipe la plus regardée, série de jours en
+  cours), navigation mobile en barre du bas (`BottomNav.jsx`, `sm:hidden`
+  sur le nav du haut), champ date pour sauter directement à une période
+  dans le calendrier.
+- Modale "Quoi de neuf" à jour (`CHANGELOG_VERSION = '2026-08-v5'`),
   vérifiée en production.
 
 ### Limites connues (API gratuites, vérifiées en live, pas de contournement)
@@ -169,16 +174,20 @@ Cloudflare, voir `vite.config.js`).
     F1), couleurs d'onglet par sport
 12. Fix : classement F1 routé via Edge Function (`fetch-session-result`)
     pour corriger un vrai rate-limit OpenF1 rencontré en test
+13. V5 : détail au clic câblé sur la page profil, navigation mobile en
+    barre du bas, résumé perso (équipe la plus regardée, série), saut de
+    date dans le calendrier
 
 ## 8. Hors scope (reporté, pas commencé)
 
 - Home dashboard dédié
-- Page statistiques personnelles détaillée
+- Page statistiques personnelles détaillée (au-delà du résumé léger déjà
+  ajouté en V5)
 - Refonte de la page profil au-delà de ce qui existe déjà
-- Navigation mobile en bottom bar
-- Rendre cliquables les lignes de matchs vus sur `UserDetailPage.jsx`
-  (même logique de détail que le calendrier, pas encore câblée là)
-- Streaks, achievements, résumé annuel
+- Rappels/notifications pour un match à venir — explicitement écarté par
+  l'utilisateur comme "trop complexe actuellement"
+- Streaks, achievements, résumé annuel — un embryon existe déjà (série de
+  jours en V5), pas de vrai système de badges/annuel derrière
 - UFC/MMA (bloqué, pas de source de données gratuite)
 - Europa League (bloqué, pas dans le plan gratuit football-data.org)
 - Compositions/événements de match foot, stats joueur NBA — bloqués sur
