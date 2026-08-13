@@ -17,7 +17,7 @@ export default function NavBar() {
           🏆 Fan<span className="text-emerald-400">Log</span>
         </span>
 
-        <nav className="flex items-center gap-1">
+        <nav className="hidden items-center gap-1 sm:flex">
           {LINKS.map((link) => (
             <NavLink
               key={link.to}

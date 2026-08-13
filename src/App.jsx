@@ -2,6 +2,7 @@ import { Routes, Route } from 'react-router-dom'
 import { useUser } from './context/UserContext'
 import Onboarding from './components/Onboarding'
 import NavBar from './components/NavBar'
+import BottomNav from './components/BottomNav'
 import WhatsNewModal from './components/WhatsNewModal'
 import CalendarPage from './pages/CalendarPage'
 import LeaderboardPage from './pages/LeaderboardPage'
@@ -22,9 +23,10 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen pb-16 sm:pb-0">
       <WhatsNewModal />
       <NavBar />
+      <BottomNav />
       <Routes>
         <Route path="/" element={<CalendarPage />} />
         <Route path="/classement" element={<LeaderboardPage />} />

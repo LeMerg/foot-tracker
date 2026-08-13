@@ -7,6 +7,7 @@ import {
   endOfWeek,
   format,
   isSameDay,
+  parse,
   startOfMonth,
   startOfWeek,
 } from 'date-fns'
@@ -205,6 +206,13 @@ export default function CalendarPage() {
               >
                 →
               </button>
+              <input
+                type="date"
+                value={format(anchor, 'yyyy-MM-dd')}
+                onChange={(e) => e.target.value && setAnchor(parse(e.target.value, 'yyyy-MM-dd', new Date()))}
+                aria-label="Aller à une date"
+                className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel-2)] px-3 py-1.5 text-sm text-white outline-none focus:border-emerald-500"
+              />
             </div>
 
             <div className="flex rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] p-0.5">

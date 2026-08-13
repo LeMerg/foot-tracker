@@ -1,29 +1,33 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { format } from 'date-fns'
+import { format, subDays } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import { supabase } from '../lib/supabaseClient'
 import { useUser } from '../context/UserContext'
 import { deleteCustomMatch } from '../lib/customMatches'
+import { getMatchStatus, hasResult } from '../lib/eventStatus'
 import { LEAGUES, F1_META } from '../data/leagues'
 import teams from '../data/teams.json'
 import LeagueBadge from '../components/LeagueBadge'
 import LeagueBarChart from '../components/LeagueBarChart'
+import ProfileStats from '../components/ProfileStats'
 import TeamLogo from '../components/TeamLogo'
 import CardSkeleton from '../components/CardSkeleton'
 import AddCustomMatchModal from '../components/AddCustomMatchModal'
+import MatchDetailModal from '../components/MatchDetailModal'
 
 export default function UserDetailPage() {
   const { pseudo } = useParams()
   const { user: loggedInUser } = useUser()
   const [user, setUser] = useState(null)
   const [watched, setWatched] = useState([])
-  const [racesWatchedCount, setRacesWatchedCount] = useState(0)
+  const [watchedRaces, setWatchedRaces] = useState([])
   const [customMatches, setCustomMatches] = useState([])
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
   const [leagueFilter, setLeagueFilter] = useState('ALL')
   const [modalOpen, setModalOpen] = useState(false)
+  const [detailMatch, setDetailMatch] = useState(null)
 
   useEffect(() => {
     let cancelled = false
@@ -47,7 +51,7 @@ export default function UserDetailPage() {
       setUser(userRow)
 
       // Jointure via la clé étrangère watched_matches.match_id -> matches_cache.id
-      const [{ data: watchedRows }, { count: racesCount }, { data: customRows }] = await Promise.all([
+      const [{ data: watchedRows }, { data: racesRows }, { data: customRows }] = await Promise.all([
         supabase
           .from('watched_matches')
           .select('*, matches_cache(*)')
@@ -55,7 +59,7 @@ export default function UserDetailPage() {
           .order('watched_at', { ascending: false }),
         supabase
           .from('watched_races')
-          .select('*', { count: 'exact', head: true })
+          .select('watched_at')
           .eq('user_id', userRow.id),
         supabase
           .from('custom_matches')
@@ -66,7 +70,7 @@ export default function UserDetailPage() {
 
       if (!cancelled) {
         setWatched(watchedRows ?? [])
-        setRacesWatchedCount(racesCount ?? 0)
+        setWatchedRaces(racesRows ?? [])
         setCustomMatches(customRows ?? [])
         setLoading(false)
       }
@@ -79,6 +83,7 @@ export default function UserDetailPage() {
   }, [pseudo])
 
   const isOwnProfile = Boolean(loggedInUser && user && loggedInUser.id === user.id)
+  const racesWatchedCount = watchedRaces.length
 
   const counts = useMemo(
     () => [
@@ -102,6 +107,56 @@ export default function UserDetailPage() {
     () => teams.find((t) => t.name === user?.favorite_team && t.league === user?.favorite_league),
     [user],
   )
+
+  // Équipe la plus regardée, tous sports/sources confondus (cache API +
+  // matchs ajoutés manuellement).
+  const topTeam = useMemo(() => {
+    const tally = new Map()
+    function bump(name, crest) {
+      if (!name) return
+      const entry = tally.get(name) ?? { name, crest, count: 0 }
+      entry.count += 1
+      if (!entry.crest && crest) entry.crest = crest
+      tally.set(name, entry)
+    }
+    for (const w of watched) {
+      const m = w.matches_cache
+      if (!m) continue
+      bump(m.home_team, m.home_crest)
+      bump(m.away_team, m.away_crest)
+    }
+    for (const c of customMatches) {
+      bump(c.home_team, teams.find((t) => t.name === c.home_team)?.crest)
+      bump(c.away_team, teams.find((t) => t.name === c.away_team)?.crest)
+    }
+    let best = null
+    for (const entry of tally.values()) {
+      if (!best || entry.count > best.count) best = entry
+    }
+    return best
+  }, [watched, customMatches])
+
+  // Jours consécutifs (jusqu'à aujourd'hui, ou hier si rien vu aujourd'hui
+  // pour ne pas casser une série "encore vivante") avec au moins un match/
+  // course/ajout manuel.
+  const streak = useMemo(() => {
+    const days = new Set()
+    for (const w of watched) if (w.watched_at) days.add(format(new Date(w.watched_at), 'yyyy-MM-dd'))
+    for (const r of watchedRaces) if (r.watched_at) days.add(format(new Date(r.watched_at), 'yyyy-MM-dd'))
+    for (const c of customMatches) if (c.created_at) days.add(format(new Date(c.created_at), 'yyyy-MM-dd'))
+
+    if (days.size === 0) return 0
+
+    let cursor = new Date()
+    if (!days.has(format(cursor, 'yyyy-MM-dd'))) cursor = subDays(cursor, 1)
+
+    let count = 0
+    while (days.has(format(cursor, 'yyyy-MM-dd'))) {
+      count += 1
+      cursor = subDays(cursor, 1)
+    }
+    return count
+  }, [watched, watchedRaces, customMatches])
 
   const totalWatched = watched.length + racesWatchedCount + customMatches.length
 
@@ -171,6 +226,8 @@ export default function UserDetailPage() {
           </Link>
         </div>
       )}
+
+      <ProfileStats topTeam={topTeam} streak={streak} />
 
       <section className="mt-6 rounded-xl border border-[var(--color-border)] bg-[var(--color-panel)] p-4">
         <h2 className="mb-3 text-sm font-semibold text-[var(--color-text-dim)]">
@@ -252,10 +309,16 @@ export default function UserDetailPage() {
         {filteredWatched.map((w) => {
           const m = w.matches_cache
           if (!m) return null
+          const clickable = hasResult(getMatchStatus(m))
           return (
             <div
               key={w.id}
-              className="flex items-center gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-panel)] p-3 transition-colors hover:border-emerald-500/30"
+              onClick={() => clickable && setDetailMatch(m)}
+              role={clickable ? 'button' : undefined}
+              tabIndex={clickable ? 0 : undefined}
+              className={`flex items-center gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-panel)] p-3 transition-colors ${
+                clickable ? 'cursor-pointer hover:border-emerald-500/30' : ''
+              }`}
             >
               <TeamLogo src={m.home_crest} name={m.home_team} size="xs" />
               <span className="truncate text-sm text-white">{m.home_team}</span>
@@ -286,6 +349,8 @@ export default function UserDetailPage() {
           onAdded={handleCustomMatchAdded}
         />
       )}
+
+      {detailMatch && <MatchDetailModal match={detailMatch} onClose={() => setDetailMatch(null)} />}
     </div>
   )
 }
