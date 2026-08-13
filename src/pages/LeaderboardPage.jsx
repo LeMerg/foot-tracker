@@ -16,7 +16,7 @@ const FILTERS = [
 export default function LeaderboardPage() {
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
-  const [filterId, setFilterId] = useState('all')
+  const [filterId, setFilterId] = useState('football')
 
   const activeFilter = FILTERS.find((f) => f.id === filterId)
 
