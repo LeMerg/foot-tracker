@@ -1,15 +1,25 @@
 // ============================================================================
 // Edge Function: notify-discord
 //
-// Rôle : envoyer un message Discord (dans le salon du bon sport) quand un
-// match ou une course vient de se terminer, pour rappeler aux amis d'aller
-// le marquer "vu" sur le site. Appelée toutes les 15 min par un job
-// pg_cron (voir la migration 20260813050000_discord_notifications.sql),
-// pas besoin d'auth pour cet appel (verify_jwt = false, voir config.toml).
+// Rôle : envoyer un message Discord (dans le salon du bon sport) pour
+// rappeler aux amis d'aller marquer "vu" sur le site. Appelée toutes les
+// 15 min par un job pg_cron (voir la migration
+// 20260813050000_discord_notifications.sql), pas besoin d'auth pour cet
+// appel (verify_jwt = false, voir config.toml).
+//
+// Foot/NBA : UN SEUL message récap par soirée (pas un message par match) —
+// une soirée de Ligue des Champions peut avoir 8-9 matchs qui finissent à
+// quelques minutes d'écart, un message par match aurait spammé le salon.
+// Une "soirée" = tous les matchs d'un sport partageant la même date UTC
+// (`utc_date`). On attend que TOUS les matchs de cette date soient dans un
+// état terminal (FINISHED/POSTPONED/CANCELLED) avant d'envoyer le récap —
+// sinon on risque d'annoncer une soirée encore en cours.
+//
+// F1 : toujours un message par week-end de course (déjà un événement
+// unique, pas de regroupement nécessaire), avec le top 5.
 //
 // Anti-doublon : chaque ligne (matches_cache/races_cache) n'est traitée
-// qu'une fois grâce à la colonne `notified_at` — un match déjà notifié est
-// ignoré aux passages suivants du cron.
+// qu'une fois grâce à la colonne `notified_at`.
 //
 // 3 webhooks indépendants (un par sport) : si l'un des secrets manque
 // (setup progressif), on traite quand même les autres sports au lieu
@@ -25,6 +35,7 @@ const CORS_HEADERS = {
 }
 
 const SITE_URL = 'https://foot-tracker.pages.dev'
+const TERMINAL_STATUSES = ['FINISHED', 'POSTPONED', 'CANCELLED']
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL')!,
@@ -46,16 +57,19 @@ const ROLE_IDS: Record<'football' | 'basketball' | 'f1', string> = {
   f1: '1537483427228553276',
 }
 
-async function postToDiscord(webhookUrl: string, content: string, roleId: string) {
+// `test: true` désactive le ping (utilisé pour vérifier un message sans
+// déranger les gens déjà sur le serveur Discord) — préfixe "(test)" et
+// allowed_mentions vide plutôt que de compter sur l'absence du rôle dans
+// le texte.
+async function postToDiscord(webhookUrl: string, content: string, roleId: string, test: boolean) {
+  const body = test
+    ? { content: `🧪 *(test)* ${content}`, allowed_mentions: { parse: [] } }
+    : { content: `<@&${roleId}> ${content}`, allowed_mentions: { roles: [roleId] } }
+
   const res = await fetch(webhookUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      content: `<@&${roleId}> ${content}`,
-      // Autorise explicitement le ping de CE rôle précis, plutôt que de
-      // compter sur le comportement par défaut de Discord.
-      allowed_mentions: { roles: [roleId] },
-    }),
+    body: JSON.stringify(body),
   })
   if (!res.ok) throw new Error(`Discord a répondu ${res.status}`)
 }
@@ -96,50 +110,90 @@ async function buildPodiumText(race: any): Promise<string | null> {
     .join('\n')
 }
 
+// Un récap par soirée (groupée par date UTC de `utc_date`) pour un sport
+// donné. Ne s'exécute que sur les soirées "closes" (plus aucun match
+// SCHEDULED/IN_PLAY ce jour-là) — sinon on attend le prochain passage du cron.
+async function processMatchRecaps(
+  sportValue: 'football' | 'basketball',
+  webhookKey: 'football' | 'basketball',
+  test: boolean,
+  skipped: string[],
+): Promise<number> {
+  const { data: rows } = await supabase
+    .from('matches_cache')
+    .select('*')
+    .eq('sport', sportValue)
+    .is('notified_at', null)
+
+  if (!rows || rows.length === 0) return 0
+
+  const groups = new Map<string, any[]>()
+  for (const m of rows) {
+    const day = String(m.utc_date).slice(0, 10)
+    if (!groups.has(day)) groups.set(day, [])
+    groups.get(day)!.push(m)
+  }
+
+  let recapsSent = 0
+
+  for (const [day, dayMatches] of groups) {
+    const stillPending = dayMatches.some((m) => !TERMINAL_STATUSES.includes(m.status))
+    if (stillPending) continue // soirée pas encore terminée, on retentera au prochain passage
+
+    const ids = dayMatches.map((m) => m.id)
+    const finished = dayMatches.filter((m) => m.status === 'FINISHED')
+
+    if (finished.length === 0) {
+      // Rien à annoncer (tout reporté/annulé) — on clôt juste le groupe.
+      await supabase.from('matches_cache').update({ notified_at: new Date().toISOString() }).in('id', ids)
+      continue
+    }
+
+    const webhook = WEBHOOKS[webhookKey]
+    if (!webhook) {
+      skipped.push(`récap ${sportValue} ${day} (secret manquant)`)
+      continue
+    }
+
+    const emoji = sportValue === 'basketball' ? '🏀' : '⚽'
+    const lines = finished.map((m) => {
+      const competition = sportValue === 'basketball' ? 'NBA' : (LEAGUE_NAMES[m.league] ?? m.league)
+      return `${m.home_team} ${m.home_score} - ${m.away_score} ${m.away_team} (${competition})`
+    })
+    const content = `${emoji} **Récap de la soirée**\n${lines.join('\n')}\nVa les marquer comme vus sur FanLog 👉 ${SITE_URL}`
+
+    try {
+      await postToDiscord(webhook, content, ROLE_IDS[webhookKey], test)
+      recapsSent += 1
+    } catch (err) {
+      skipped.push(`récap ${sportValue} ${day} : ${(err as Error).message}`)
+      continue
+    }
+
+    await supabase.from('matches_cache').update({ notified_at: new Date().toISOString() }).in('id', ids)
+  }
+
+  return recapsSent
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: CORS_HEADERS })
   }
 
+  const { test } = await req.json().catch(() => ({ test: false }))
   const skipped: string[] = []
-  let matchesNotified = 0
-  let racesNotified = 0
 
-  // --- Matchs (foot + NBA, même vocabulaire de statut) ---
-  const { data: matches } = await supabase
-    .from('matches_cache')
-    .select('*')
-    .eq('status', 'FINISHED')
-    .is('notified_at', null)
+  const footballRecaps = await processMatchRecaps('football', 'football', Boolean(test), skipped)
+  const basketballRecaps = await processMatchRecaps('basketball', 'basketball', Boolean(test), skipped)
 
-  for (const m of matches ?? []) {
-    const sportKey = m.sport === 'basketball' ? 'basketball' : 'football'
-    const webhook = WEBHOOKS[sportKey]
-    if (!webhook) {
-      skipped.push(`match ${m.id} (${m.sport} : secret manquant)`)
-      continue
-    }
-
-    const emoji = m.sport === 'basketball' ? '🏀' : '⚽'
-    const competition = m.sport === 'basketball' ? 'NBA' : (LEAGUE_NAMES[m.league] ?? m.league)
-    const content = `${emoji} **${m.home_team} ${m.home_score} - ${m.away_score} ${m.away_team}** (${competition}) est terminé ! Va le marquer comme vu sur FanLog 👉 ${SITE_URL}`
-
-    try {
-      await postToDiscord(webhook, content, ROLE_IDS[sportKey])
-      matchesNotified += 1
-    } catch (err) {
-      skipped.push(`match ${m.id} : ${(err as Error).message}`)
-      continue
-    }
-
-    await supabase.from('matches_cache').update({ notified_at: new Date().toISOString() }).eq('id', m.id)
-  }
-
-  // --- Courses F1 ---
+  // --- Courses F1 (déjà un message par week-end, pas de regroupement à faire) ---
   const { data: races } = await supabase
     .from('races_cache')
     .select('*')
     .is('notified_at', null)
+
+  let racesNotified = 0
 
   for (const r of races ?? []) {
     if (!isRaceOver(r)) continue
@@ -155,7 +209,7 @@ Deno.serve(async (req) => {
       : `🏎️ **${r.name}** est terminée ! Le classement complet est dispo sur FanLog 👉 ${SITE_URL}`
 
     try {
-      await postToDiscord(WEBHOOKS.f1, content, ROLE_IDS.f1)
+      await postToDiscord(WEBHOOKS.f1, content, ROLE_IDS.f1, Boolean(test))
       racesNotified += 1
     } catch (err) {
       skipped.push(`course ${r.id} : ${(err as Error).message}`)
@@ -165,7 +219,8 @@ Deno.serve(async (req) => {
     await supabase.from('races_cache').update({ notified_at: new Date().toISOString() }).eq('id', r.id)
   }
 
-  return new Response(JSON.stringify({ matches: matchesNotified, races: racesNotified, skipped }), {
-    headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-  })
+  return new Response(
+    JSON.stringify({ footballRecaps, basketballRecaps, races: racesNotified, skipped }),
+    { headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } },
+  )
 })
