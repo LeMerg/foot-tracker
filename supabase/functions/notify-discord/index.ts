@@ -119,11 +119,22 @@ async function processMatchRecaps(
   test: boolean,
   skipped: string[],
 ): Promise<number> {
+  // Bornée aux 3 derniers jours passés : sans ça, la requête ramène aussi
+  // les centaines/milliers de matchs SCHEDULED du reste de la saison (tous
+  // "non notifiés" par défaut) et se fait tronquer par la limite par
+  // défaut de PostgREST (1000 lignes) — un match déjà joué mais trié après
+  // ce seuil ne serait alors jamais repris. Un match futur n'a de toute
+  // façon rien à faire dans un récap avant sa date.
+  const now = new Date()
+  const windowStart = new Date(now.getTime() - 3 * 24 * 3_600_000).toISOString()
+
   const { data: rows } = await supabase
     .from('matches_cache')
     .select('*')
     .eq('sport', sportValue)
     .is('notified_at', null)
+    .gte('utc_date', windowStart)
+    .lt('utc_date', now.toISOString())
 
   if (!rows || rows.length === 0) return 0
 
