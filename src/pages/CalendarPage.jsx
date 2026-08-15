@@ -12,7 +12,7 @@ import {
   startOfWeek,
 } from 'date-fns'
 import { fr } from 'date-fns/locale'
-import { fetchMatches, triggerMatchesRefresh } from '../lib/matches'
+import { fetchMatches, triggerMatchesRefresh, triggerHighlightlyRefresh } from '../lib/matches'
 import { fetchRaces, triggerRacesRefresh } from '../lib/races'
 import { useUser } from '../context/UserContext'
 import { useWatchedMatches } from '../hooks/useWatchedMatches'
@@ -67,6 +67,7 @@ export default function CalendarPage() {
   // caches si besoin (elles gèrent elles-mêmes le throttle).
   useEffect(() => {
     triggerMatchesRefresh()
+    triggerHighlightlyRefresh()
     triggerRacesRefresh()
   }, [])
 

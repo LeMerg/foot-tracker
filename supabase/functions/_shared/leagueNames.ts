@@ -7,4 +7,9 @@ export const LEAGUE_NAMES: Record<string, string> = {
   FL1: 'Ligue 1',
   SA: 'Serie A',
   CL: 'Ligue des Champions',
+  EL: 'Ligue Europa',
+  ECL: 'Ligue Europa Conférence',
+  ERE: 'Eredivisie',
+  JPL: 'Jupiler Pro League',
+  PPL: 'Primeira Liga',
 }

@@ -24,3 +24,6 @@ verify_jwt = false
 
 [functions.notify-discord]
 verify_jwt = false
+
+[functions.fetch-highlightly]
+verify_jwt = false

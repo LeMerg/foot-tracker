@@ -2,16 +2,18 @@
 
 Site privé (toi + tes amis) qui regroupe le calendrier des 5 grands championnats
 européens (Premier League, La Liga, Bundesliga, Ligue 1, Serie A), de la
-Ligue des Champions, de la **NBA** et de la **Formule 1** — avec pseudo,
-suivi de ce que tu as vu, et classement.
+Ligue des Champions, de la Ligue Europa, de la Ligue Europa Conférence, de
+l'Eredivisie, de la Jupiler Pro League, de la Primeira Liga, de la **NBA**
+et de la **Formule 1** — avec pseudo, suivi de ce que tu as vu, et classement.
 
-> L'Europa League et l'UFC/MMA ne sont pas (encore) inclus : pas de source de
-> données gratuite fiable trouvée pour l'instant (voir section 5 "Limites
-> connues").
+> L'UFC/MMA n'est pas (encore) inclus : pas de source de données gratuite
+> fiable trouvée pour l'instant (voir section 5 "Limites connues").
 
 **Stack** : React (Vite) + Tailwind CSS + Supabase (base de données/API +
 Edge Functions) + données [football-data.org](https://www.football-data.org/)
-(foot), [balldontlie.io](https://balldontlie.io) (NBA) et
+(5 grands championnats + C1), [Highlightly](https://highlightly.net/football-api/)
+(Eredivisie, Jupiler Pro League, Primeira Liga, Ligue Europa, Ligue Europa
+Conférence), [balldontlie.io](https://balldontlie.io) (NBA) et
 [OpenF1](https://openf1.org) (F1). Site 100% statique, hébergeable
 gratuitement sur GitHub Pages (ou Cloudflare Pages, voir section 3.4).
 
@@ -76,22 +78,34 @@ supabase link --project-ref njbfshxkismqikjzvrbm
 # 3. Enregistre tes clés comme secrets (jamais dans le code)
 supabase secrets set FOOTBALL_DATA_API_KEY=ta_cle_football-data
 supabase secrets set BALLDONTLIE_API_KEY=ta_cle_balldontlie
+supabase secrets set HIGHLIGHTLY_API_KEY=ta_cle_highlightly
 # (pas de clé nécessaire pour OpenF1, l'API F1 est ouverte)
 
-# 4. Déploie les 4 fonctions
+# 4. Déploie les 5 fonctions
 supabase functions deploy fetch-matches
 supabase functions deploy fetch-nba
 supabase functions deploy fetch-races
 supabase functions deploy fetch-match-detail
+supabase functions deploy fetch-highlightly
 ```
 
 Le fichier [`supabase/config.toml`](supabase/config.toml) désactive déjà la
-vérification JWT pour ces 4 fonctions (elles ne font rien de sensible :
+vérification JWT pour ces fonctions (elles ne font rien de sensible :
 elles ne font que déclencher un rafraîchissement des caches publics, ou
 récupérer le détail d'un match déjà terminé). `fetch-match-detail` ne
 tourne jamais toute seule (pas de rafraîchissement en masse) : elle ne
 s'appelle qu'au clic sur un match déjà joué, et cache son résultat de
 façon permanente une fois récupéré.
+
+**`fetch-highlightly`** couvre l'Eredivisie, la Jupiler Pro League, la
+Primeira Liga, la Ligue Europa et la Ligue Europa Conférence — plan
+gratuit Highlightly limité à **100 requêtes/jour** (pas de souci chez
+football-data.org qui n'a pas ce genre de plafond). Du coup, contrairement
+aux autres fonctions (fenêtre de rafraîchissement 6h, compétition entière
+à chaque fois), celle-ci se limite à une fenêtre glissante de 10 jours à
+venir, rafraîchie 1x/24h (5 compétitions × 10 jours = 50 requêtes/jour,
+large marge). Compromis assumé : un score peut mettre jusqu'à ~24h à
+apparaître après la fin d'un match sur ces 5 compétitions spécifiquement.
 
 **Rafraîchissement automatique (optionnel)** : par défaut, chaque fonction se
 déclenche à chaque ouverture du calendrier par un utilisateur (et se

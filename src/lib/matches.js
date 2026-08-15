@@ -30,6 +30,13 @@ export function triggerMatchesRefresh() {
   })
 }
 
+// Même principe pour les compétitions supplémentaires via Highlightly
+// (Eredivisie, Jupiler Pro League, Primeira Liga, Ligue Europa, Ligue
+// Europa Conférence) — voir supabase/functions/fetch-highlightly.
+export function triggerHighlightlyRefresh() {
+  supabase.functions.invoke('fetch-highlightly').catch(() => {})
+}
+
 // Détail d'un match déjà joué (score mi-temps/arbitre pour le foot, déjà
 // caché en base après un premier appel ; quart-temps pour la NBA, déjà
 // présent sur la ligne). null si rien à montrer (NBA sans quart-temps —

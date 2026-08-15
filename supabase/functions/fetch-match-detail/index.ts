@@ -28,6 +28,13 @@ const supabase = createClient(
 
 const FOOTBALL_DATA_API_KEY = Deno.env.get('FOOTBALL_DATA_API_KEY')
 
+// Ligues dont l'external_id vient de football-data.org — seule source que
+// cette fonction sait interroger. Les ligues ajoutées via Highlightly
+// (voir fetch-highlightly) ont des external_id qui ne veulent rien dire
+// pour l'API football-data.org : autant ne pas tenter un appel voué à
+// échouer et renvoyer directement "rien à afficher".
+const FOOTBALL_DATA_LEAGUES = new Set(['PL', 'PD', 'BL1', 'FL1', 'SA', 'CL'])
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: CORS_HEADERS })
@@ -45,7 +52,7 @@ Deno.serve(async (req) => {
 
     const { data: row, error: rowError } = await supabase
       .from('matches_cache')
-      .select('id, sport, external_id, details')
+      .select('id, sport, league, external_id, details')
       .eq('id', id)
       .maybeSingle()
 
@@ -59,6 +66,13 @@ Deno.serve(async (req) => {
     if (row.sport !== 'football') {
       return new Response(JSON.stringify({ error: 'Détail disponible pour le foot uniquement.' }), {
         status: 400,
+        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+      })
+    }
+
+    if (!FOOTBALL_DATA_LEAGUES.has(row.league)) {
+      const empty = { halfTime: null, referees: [], stage: null, group: null, venue: null }
+      return new Response(JSON.stringify(empty), {
         headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
       })
     }

@@ -14,13 +14,27 @@ export const DOMESTIC_LEAGUES = [
 ]
 
 // Compétitions européennes ponctuelles, en plus des championnats domestiques.
+// EL/ECL viennent de l'API Highlightly (football-data.org ne les couvre
+// pas sur son plan gratuit) — même table matches_cache, juste une source
+// différente derrière (voir supabase/functions/fetch-highlightly).
 export const CUP_LEAGUES = [
   { code: 'CL', name: 'Ligue des Champions', country: 'Europe', color: '#1a1464' },
+  { code: 'EL', name: 'Ligue Europa', country: 'Europe', color: '#ff6600' },
+  { code: 'ECL', name: 'Ligue Europa Conférence', country: 'Europe', color: '#00b28b' },
+]
+
+// Championnats domestiques supplémentaires (via Highlightly) : affichés au
+// calendrier mais pas dans DOMESTIC_LEAGUES — leurs équipes ne sont pas
+// dans teams.json, donc pas sélectionnables comme équipe favorite.
+export const OTHER_DOMESTIC_LEAGUES = [
+  { code: 'ERE', name: 'Eredivisie', country: 'Pays-Bas', color: '#e5007d' },
+  { code: 'JPL', name: 'Jupiler Pro League', country: 'Belgique', color: '#f5a623' },
+  { code: 'PPL', name: 'Primeira Liga', country: 'Portugal', color: '#2e7d32' },
 ]
 
 // Toutes les compétitions football dont on affiche les matchs dans le
 // calendrier (filtre par ligue, badges, répartition par championnat...).
-export const FOOTBALL_LEAGUES = [...DOMESTIC_LEAGUES, ...CUP_LEAGUES]
+export const FOOTBALL_LEAGUES = [...DOMESTIC_LEAGUES, ...CUP_LEAGUES, ...OTHER_DOMESTIC_LEAGUES]
 
 // NBA : partage matches_cache/watched_matches avec le foot (même forme
 // "équipe A vs équipe B, un score"), donc traité comme une ligue de plus.
