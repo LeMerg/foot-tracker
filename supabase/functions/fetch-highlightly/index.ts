@@ -12,14 +12,22 @@
 // football-data.org, mais ici un vrai plafond quotidien) et son endpoint
 // /matches ne prend qu'un seul jour à la fois (`date=YYYY-MM-DD`), pas de
 // plage. Récupérer une saison entière (~300-400 matchs/compétition) à
-// chaque rafraîchissement est donc hors de question. À la place : une
-// fenêtre glissante de 10 jours, rafraîchie 1x/24h — 5 compétitions × 10
-// jours = 50 requêtes/jour, large marge sous la limite. Compromis assumé :
-// un score peut mettre jusqu'à ~24h à apparaître après la fin d'un match.
+// chaque rafraîchissement est donc hors de question.
+//
+// Deux vitesses de rafraîchissement, pour ne pas sacrifier le suivi "live"
+// du jour même au profit de la fenêtre large :
+//   - Aujourd'hui : TTL courte (3h) — un match qui vient de commencer ou de
+//     se terminer apparaît à jour en quelques heures, pas le lendemain.
+//   - Les 9 jours suivants : TTL longue (24h), comme avant — rien ne change
+//     sur un match qui n'a pas encore eu lieu, pas besoin de le vérifier
+//     souvent.
+// Budget pire cas : (24h/3h) × 5 ligues [aujourd'hui] + 9 jours × 5 ligues
+// [fenêtre future, 1x/24h] = 40 + 45 = 85 requêtes/jour, sous les 100/jour.
 // ============================================================================
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
+const TODAY_CACHE_HOURS = 3
 const CACHE_HOURS = 24
 const WINDOW_DAYS = 10
 
@@ -60,19 +68,34 @@ function currentSeason(): number {
   return month >= 6 ? now.getUTCFullYear() : now.getUTCFullYear() - 1
 }
 
-async function isCacheFresh(): Promise<boolean> {
-  const { data, error } = await supabase
+// today = true : ne regarde que les lignes datées d'aujourd'hui (fraîcheur
+// du suivi live). today = false : ne regarde QUE les lignes datées après
+// aujourd'hui (fraîcheur de la fenêtre future) — sans cette exclusion, les
+// mises à jour fréquentes de la passe 1 (toutes les 3h) feraient paraître
+// la fenêtre "fraîche" en permanence et elle ne se rafraîchirait plus jamais.
+// S'il n'y a aucune ligne correspondante (ex. aucun match aujourd'hui dans
+// ces 5 ligues), on considère que ce n'est pas frais : mieux vaut un appel
+// API qui revient vide qu'un cache jamais vérifié.
+async function isCacheFresh(hours: number, today: boolean): Promise<boolean> {
+  const start = new Date()
+  start.setUTCHours(0, 0, 0, 0)
+  const end = new Date(start.getTime() + 24 * 3_600_000)
+
+  let query = supabase
     .from('matches_cache')
     .select('fetched_at')
     .in('league', LEAGUES.map((l) => l.code))
-    .order('fetched_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
+
+  query = today
+    ? query.gte('utc_date', start.toISOString()).lt('utc_date', end.toISOString())
+    : query.gte('utc_date', end.toISOString())
+
+  const { data, error } = await query.order('fetched_at', { ascending: false }).limit(1).maybeSingle()
 
   if (error || !data) return false
 
   const ageHours = (Date.now() - new Date(data.fetched_at).getTime()) / 3_600_000
-  return ageHours < CACHE_HOURS
+  return ageHours < hours
 }
 
 // Vocabulaire propre à Highlightly (state.description, texte libre) ->
@@ -141,36 +164,55 @@ Deno.serve(async (req) => {
     )
   }
 
-  if (await isCacheFresh()) {
-    return new Response(JSON.stringify({ status: 'cached' }), {
-      headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-    })
+  const season = currentSeason()
+  const results: { league: string; tier: 'today' | 'window'; status: 'ok' | 'error'; count?: number; error?: string }[] = []
+
+  // Passe 1 : aujourd'hui, TTL courte — c'est ici que se joue le suivi live.
+  if (!(await isCacheFresh(TODAY_CACHE_HOURS, true))) {
+    const today = isoDate(new Date())
+    for (const league of LEAGUES) {
+      try {
+        const matches = await fetchDayMatches(league.id, season, today)
+        const rows = matches.map((m) => mapMatchToRow(m, league.code))
+        if (rows.length > 0) {
+          const { error } = await supabase
+            .from('matches_cache')
+            .upsert(rows, { onConflict: 'sport,external_id' })
+          if (error) throw error
+        }
+        results.push({ league: league.code, tier: 'today', status: 'ok', count: rows.length })
+        await sleep(300)
+      } catch (err) {
+        results.push({ league: league.code, tier: 'today', status: 'error', error: (err as Error).message })
+      }
+    }
   }
 
-  const season = currentSeason()
-  const days = Array.from({ length: WINDOW_DAYS }, (_, i) => isoDate(new Date(Date.now() + i * 24 * 3_600_000)))
+  // Passe 2 : les 9 jours suivants, TTL longue — aujourd'hui déjà couvert
+  // par la passe 1, pas la peine de le refaire ici.
+  if (!(await isCacheFresh(CACHE_HOURS, false))) {
+    const days = Array.from({ length: WINDOW_DAYS - 1 }, (_, i) => isoDate(new Date(Date.now() + (i + 1) * 24 * 3_600_000)))
 
-  const results: { league: string; status: 'ok' | 'error'; count?: number; error?: string }[] = []
+    for (const league of LEAGUES) {
+      try {
+        const rows: any[] = []
+        for (const date of days) {
+          const matches = await fetchDayMatches(league.id, season, date)
+          rows.push(...matches.map((m) => mapMatchToRow(m, league.code)))
+          await sleep(300) // reste large sous les limites de débit
+        }
 
-  for (const league of LEAGUES) {
-    try {
-      const rows: any[] = []
-      for (const date of days) {
-        const matches = await fetchDayMatches(league.id, season, date)
-        rows.push(...matches.map((m) => mapMatchToRow(m, league.code)))
-        await sleep(300) // reste large sous les limites de débit
+        if (rows.length > 0) {
+          const { error } = await supabase
+            .from('matches_cache')
+            .upsert(rows, { onConflict: 'sport,external_id' })
+          if (error) throw error
+        }
+
+        results.push({ league: league.code, tier: 'window', status: 'ok', count: rows.length })
+      } catch (err) {
+        results.push({ league: league.code, tier: 'window', status: 'error', error: (err as Error).message })
       }
-
-      if (rows.length > 0) {
-        const { error } = await supabase
-          .from('matches_cache')
-          .upsert(rows, { onConflict: 'sport,external_id' })
-        if (error) throw error
-      }
-
-      results.push({ league: league.code, status: 'ok', count: rows.length })
-    } catch (err) {
-      results.push({ league: league.code, status: 'error', error: (err as Error).message })
     }
   }
 

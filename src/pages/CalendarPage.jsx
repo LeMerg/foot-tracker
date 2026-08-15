@@ -28,6 +28,27 @@ const VIEW_MODES = [
   { id: 'month', label: 'Mois' },
 ]
 
+// Filtres de ligue mémorisés par sport (localStorage) : on ne perd pas sa
+// sélection en rechargeant/relançant le navigateur. Si rien n'est encore
+// enregistré (première visite), ou si une ligue enregistrée n'existe plus,
+// on retombe sur "toutes les ligues du sport" (comportement d'origine).
+function leagueFilterKey(sportId) {
+  return `fanlog:selected-leagues:${sportId}`
+}
+
+function loadSelectedLeagues(sportId, leagues) {
+  try {
+    const raw = localStorage.getItem(leagueFilterKey(sportId))
+    if (raw) {
+      const codes = JSON.parse(raw).filter((c) => leagues.some((l) => l.code === c))
+      if (codes.length > 0) return new Set(codes)
+    }
+  } catch {
+    // localStorage indisponible/valeur corrompue : on retombe sur le défaut.
+  }
+  return new Set(leagues.map((l) => l.code))
+}
+
 function getRange(anchor, mode) {
   if (mode === 'week') {
     return { from: startOfWeek(anchor, { weekStartsOn: 1 }), to: endOfWeek(anchor, { weekStartsOn: 1 }) }
@@ -50,7 +71,7 @@ export default function CalendarPage() {
   const [anchor, setAnchor] = useState(() => new Date())
   const [selectedDay, setSelectedDay] = useState(null)
   const [selectedLeagues, setSelectedLeagues] = useState(
-    () => new Set(SPORTS[0].leagues.map((l) => l.code)),
+    () => loadSelectedLeagues(SPORTS[0].id, SPORTS[0].leagues),
   )
   const [matches, setMatches] = useState([])
   const [loadingMatches, setLoadingMatches] = useState(true)
@@ -118,7 +139,7 @@ export default function CalendarPage() {
   function handleSportChange(id) {
     setSport(id)
     const next = SPORTS.find((s) => s.id === id)
-    if (next.leagues) setSelectedLeagues(new Set(next.leagues.map((l) => l.code)))
+    if (next.leagues) setSelectedLeagues(loadSelectedLeagues(id, next.leagues))
   }
 
   function toggleLeague(code) {
@@ -126,6 +147,9 @@ export default function CalendarPage() {
       const next = new Set(prev)
       if (next.has(code)) next.delete(code)
       else next.add(code)
+      if (activeSport.leagues) {
+        localStorage.setItem(leagueFilterKey(sport), JSON.stringify([...next]))
+      }
       return next
     })
   }

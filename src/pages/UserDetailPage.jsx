@@ -6,7 +6,7 @@ import { supabase } from '../lib/supabaseClient'
 import { useUser } from '../context/UserContext'
 import { deleteCustomMatch } from '../lib/customMatches'
 import { getMatchStatus, hasResult } from '../lib/eventStatus'
-import { LEAGUES, F1_META } from '../data/leagues'
+import { LEAGUES, LEAGUE_BY_CODE, F1_META } from '../data/leagues'
 import teams from '../data/teams.json'
 import LeagueBadge from '../components/LeagueBadge'
 import LeagueBarChart from '../components/LeagueBarChart'
@@ -309,7 +309,7 @@ export default function UserDetailPage() {
         {filteredWatched.map((w) => {
           const m = w.matches_cache
           if (!m) return null
-          const clickable = hasResult(getMatchStatus(m))
+          const clickable = hasResult(getMatchStatus(m)) && LEAGUE_BY_CODE[m.league]?.hasDetail !== false
           return (
             <div
               key={w.id}

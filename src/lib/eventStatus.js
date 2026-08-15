@@ -15,8 +15,22 @@ const MATCH_STATUS_MAP = {
   CANCELLED: 'cancelled',
 }
 
+// Le cache (matches_cache) n'est rafraîchi que toutes les 6h : un match dont
+// le statut brut est encore IN_PLAY/PAUSED/SUSPENDED peut donc rester
+// "EN DIRECT" bien après sa fin réelle, jusqu'au prochain rafraîchissement.
+// Passé ce délai depuis le coup d'envoi (couvre un match standard, marge
+// de mi-temps incluse ; un match avec prolongations/tirs au but peut dans
+// de rares cas encore être réellement en cours à ce stade), on considère
+// que le match est terminé même si le cache n'a pas encore été mis à jour.
+const STALE_LIVE_HOURS = 2
+
 export function getMatchStatus(match) {
-  return MATCH_STATUS_MAP[match.status] ?? 'scheduled'
+  const status = MATCH_STATUS_MAP[match.status] ?? 'scheduled'
+  if (status === 'live') {
+    const hoursSinceKickoff = (Date.now() - new Date(match.utc_date).getTime()) / 3_600_000
+    if (hoursSinceKickoff > STALE_LIVE_HOURS) return 'completed'
+  }
+  return status
 }
 
 // Une session F1 n'a pas de statut explicite côté OpenF1 (à part

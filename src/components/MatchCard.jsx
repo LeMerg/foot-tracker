@@ -12,7 +12,10 @@ export default function MatchCard({ match, watched, onToggleWatched }) {
   const status = getMatchStatus(match)
   const cancelled = status === 'cancelled'
   const league = LEAGUE_BY_CODE[match.league]
-  const clickable = hasResult(status)
+  // Certaines ligues (Highlightly : EL/ECL/ERE/JPL/PPL) n'ont aucun détail
+  // interrogeable (voir fetch-match-detail) — pas la peine de rendre la
+  // carte cliquable pour ouvrir une modale qui n'affichera jamais rien.
+  const clickable = hasResult(status) && league?.hasDetail !== false
 
   return (
     <div

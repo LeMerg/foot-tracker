@@ -17,19 +17,22 @@ export const DOMESTIC_LEAGUES = [
 // EL/ECL viennent de l'API Highlightly (football-data.org ne les couvre
 // pas sur son plan gratuit) — même table matches_cache, juste une source
 // différente derrière (voir supabase/functions/fetch-highlightly).
+// hasDetail: false = pas de mi-temps/arbitre/stage disponible pour cette
+// ligue (source Highlightly, voir fetch-match-detail) — sert à ne pas
+// rendre la carte cliquable pour un détail qui n'existera jamais.
 export const CUP_LEAGUES = [
   { code: 'CL', name: 'Ligue des Champions', country: 'Europe', color: '#1a1464' },
-  { code: 'EL', name: 'Ligue Europa', country: 'Europe', color: '#ff6600' },
-  { code: 'ECL', name: 'Ligue Europa Conférence', country: 'Europe', color: '#00b28b' },
+  { code: 'EL', name: 'Ligue Europa', country: 'Europe', color: '#ff6600', hasDetail: false },
+  { code: 'ECL', name: 'Ligue Europa Conférence', country: 'Europe', color: '#00b28b', hasDetail: false },
 ]
 
 // Championnats domestiques supplémentaires (via Highlightly) : affichés au
 // calendrier mais pas dans DOMESTIC_LEAGUES — leurs équipes ne sont pas
 // dans teams.json, donc pas sélectionnables comme équipe favorite.
 export const OTHER_DOMESTIC_LEAGUES = [
-  { code: 'ERE', name: 'Eredivisie', country: 'Pays-Bas', color: '#e5007d' },
-  { code: 'JPL', name: 'Jupiler Pro League', country: 'Belgique', color: '#f5a623' },
-  { code: 'PPL', name: 'Primeira Liga', country: 'Portugal', color: '#2e7d32' },
+  { code: 'ERE', name: 'Eredivisie', country: 'Pays-Bas', color: '#e5007d', hasDetail: false },
+  { code: 'JPL', name: 'Jupiler Pro League', country: 'Belgique', color: '#f5a623', hasDetail: false },
+  { code: 'PPL', name: 'Primeira Liga', country: 'Portugal', color: '#2e7d32', hasDetail: false },
 ]
 
 // Toutes les compétitions football dont on affiche les matchs dans le
