@@ -37,6 +37,16 @@ const CORS_HEADERS = {
 const SITE_URL = 'https://foot-tracker.pages.dev'
 const TERMINAL_STATUSES = ['FINISHED', 'POSTPONED', 'CANCELLED']
 
+// Même compromis que côté frontend (src/lib/eventStatus.js) : le cache
+// Highlightly ne se rafraîchit que toutes les 3h, donc un match peut rester
+// IN_PLAY dans matches_cache bien après sa fin réelle. Sans ce filet de
+// sécurité, UN SEUL match encore marqué IN_PLAY (à tort) bloquerait le récap
+// de toute la soirée indéfiniment, pour tous les sports. Passé ce délai
+// depuis le coup d'envoi, on traite le match comme terminé (avec son
+// dernier score connu) plutôt que d'attendre un rafraîchissement qui n'a
+// pas eu lieu.
+const STALE_LIVE_HOURS = 2
+
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL')!,
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
@@ -81,6 +91,31 @@ function isRaceOver(race: any): boolean {
   const relevant = sessions.filter((s: any) => !s.is_cancelled)
   if (relevant.length === 0) return false
   return relevant.every((s: any) => new Date(s.date_end).getTime() < Date.now())
+}
+
+// Un match encore IN_PLAY/PAUSED/SUSPENDED dont le coup d'envoi remonte à
+// plus de STALE_LIVE_HOURS est traité comme terminé (cache jamais rafraîchi
+// après la fin réelle), sans quoi il resterait "en attente" pour toujours.
+function isStaleLive(m: any): boolean {
+  if (TERMINAL_STATUSES.includes(m.status)) return false
+  const hoursSinceKickoff = (Date.now() - new Date(m.utc_date).getTime()) / 3_600_000
+  return hoursSinceKickoff > STALE_LIVE_HOURS
+}
+
+function isEffectivelyClosed(m: any): boolean {
+  return TERMINAL_STATUSES.includes(m.status) || isStaleLive(m)
+}
+
+// Regroupe une liste de matchs par compétition, dans l'ordre alphabétique
+// du nom affiché — sert au format de récap "---------Ligue---------".
+function groupByLeague(matches: any[], sportValue: 'football' | 'basketball'): Map<string, any[]> {
+  const byLeague = new Map<string, any[]>()
+  for (const m of matches) {
+    const name = sportValue === 'basketball' ? 'NBA' : (LEAGUE_NAMES[m.league] ?? m.league)
+    if (!byLeague.has(name)) byLeague.set(name, [])
+    byLeague.get(name)!.push(m)
+  }
+  return new Map([...byLeague.entries()].sort(([a], [b]) => a.localeCompare(b)))
 }
 
 const PODIUM_MEDALS = ['🥇', '🥈', '🥉']
@@ -148,11 +183,11 @@ async function processMatchRecaps(
   let recapsSent = 0
 
   for (const [day, dayMatches] of groups) {
-    const stillPending = dayMatches.some((m) => !TERMINAL_STATUSES.includes(m.status))
+    const stillPending = dayMatches.some((m) => !isEffectivelyClosed(m))
     if (stillPending) continue // soirée pas encore terminée, on retentera au prochain passage
 
     const ids = dayMatches.map((m) => m.id)
-    const finished = dayMatches.filter((m) => m.status === 'FINISHED')
+    const finished = dayMatches.filter((m) => m.status === 'FINISHED' || isStaleLive(m))
 
     if (finished.length === 0) {
       // Rien à annoncer (tout reporté/annulé) — on clôt juste le groupe.
@@ -167,11 +202,11 @@ async function processMatchRecaps(
     }
 
     const emoji = sportValue === 'basketball' ? '🏀' : '⚽'
-    const lines = finished.map((m) => {
-      const competition = sportValue === 'basketball' ? 'NBA' : (LEAGUE_NAMES[m.league] ?? m.league)
-      return `${m.home_team} ${m.home_score} - ${m.away_score} ${m.away_team} (${competition})`
+    const sections = [...groupByLeague(finished, sportValue).entries()].map(([leagueName, ms]) => {
+      const lines = ms.map((m) => `${m.home_team} ${m.home_score} - ${m.away_score} ${m.away_team}`)
+      return `---------${leagueName}---------\n${lines.join('\n')}`
     })
-    const content = `${emoji} **Récap de la soirée**\n${lines.join('\n')}\nVa les marquer comme vus sur FanLog 👉 ${SITE_URL}`
+    const content = `${emoji} **Récap de la soirée**\n\n${sections.join('\n\n')}\n\nVa les marquer comme vus sur FanLog 👉 ${SITE_URL}`
 
     try {
       await postToDiscord(webhook, content, ROLE_IDS[webhookKey], test)
