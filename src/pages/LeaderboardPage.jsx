@@ -8,7 +8,8 @@ import { RANK_STYLES, MEDALS } from '../data/rankStyles'
 
 const FILTERS = [
   { id: 'all', label: 'Tout', metric: 'total_watched', color: '#10b981', description: 'Qui a vu le plus de contenu (foot, NBA, F1) au total.' },
-  { id: 'football', label: '⚽ Foot', metric: 'football_watched', color: '#10b981', description: 'Qui a vu le plus de matchs de foot (calendrier + ajoutés manuellement).' },
+  { id: 'football_main', label: '⚽ Foot', metric: 'football_main_watched', color: '#10b981', description: 'Qui a vu le plus de matchs des 5 grands championnats + Ligue des Champions (+ ajoutés manuellement).' },
+  { id: 'football', label: '⚽ Foot (toutes ligues)', metric: 'football_watched', color: '#10b981', description: 'Qui a vu le plus de matchs de foot, toutes compétitions confondues (+ ajoutés manuellement).' },
   { id: 'basketball', label: '🏀 NBA', metric: 'basketball_watched', color: '#f97316', description: 'Qui a vu le plus de matchs NBA.' },
   { id: 'f1', label: '🏎️ F1', metric: 'f1_watched', color: '#e10600', description: 'Qui a vu le plus de courses F1.' },
 ]
@@ -16,7 +17,7 @@ const FILTERS = [
 export default function LeaderboardPage() {
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
-  const [filterId, setFilterId] = useState('football')
+  const [filterId, setFilterId] = useState('football_main')
 
   const activeFilter = FILTERS.find((f) => f.id === filterId)
 
