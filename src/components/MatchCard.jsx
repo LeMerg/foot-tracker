@@ -54,7 +54,7 @@ export default function MatchCard({ match, watched, onToggleWatched }) {
             <span className="text-[10px] font-semibold uppercase tracking-wide text-red-400">Annulé</span>
           ) : status === 'completed' || status === 'live' ? (
             <span className="text-lg font-bold tabular-nums text-white">
-              {match.home_score} - {match.away_score}
+              {match.home_score ?? '-'} - {match.away_score ?? '-'}
             </span>
           ) : (
             <span className="text-sm text-[var(--color-text-dim)]">vs</span>

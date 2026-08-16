@@ -111,12 +111,18 @@ function mapStatus(description: string | undefined): string {
   return 'SCHEDULED'
 }
 
-// "0 - 3" -> [0, 3]. null si pas encore joué (score absent/non numérique).
+// "0 - 3" -> [0, 3]. Un match décidé aux tirs au but ajoute le score de la
+// séance entre parenthèses (ex. "0 - 0 (5 - 4)") : la regex ne capture que
+// les deux premiers nombres (le score du temps réglementaire/prolongations,
+// celui qu'on affiche), sans se soucier de ce qui suit. Un split naïf sur
+// TOUS les tirets cassait dans ce cas précis (plus de 2 morceaux -> score
+// entier renvoyé à null, y compris pour un 0-0 suivi de tirs au but).
+// null si pas encore joué (score absent/format inattendu).
 function parseScore(current: string | null | undefined): [number | null, number | null] {
   if (!current) return [null, null]
-  const parts = current.split('-').map((p) => Number(p.trim()))
-  if (parts.length !== 2 || parts.some((n) => Number.isNaN(n))) return [null, null]
-  return [parts[0], parts[1]]
+  const match = current.match(/^\s*(\d+)\s*-\s*(\d+)/)
+  if (!match) return [null, null]
+  return [Number(match[1]), Number(match[2])]
 }
 
 function mapMatchToRow(match: any, league: string) {

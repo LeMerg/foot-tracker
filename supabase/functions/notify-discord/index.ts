@@ -154,14 +154,26 @@ async function processMatchRecaps(
   test: boolean,
   skipped: string[],
 ): Promise<number> {
-  // Bornée aux 3 derniers jours passés : sans ça, la requête ramène aussi
-  // les centaines/milliers de matchs SCHEDULED du reste de la saison (tous
-  // "non notifiés" par défaut) et se fait tronquer par la limite par
-  // défaut de PostgREST (1000 lignes) — un match déjà joué mais trié après
-  // ce seuil ne serait alors jamais repris. Un match futur n'a de toute
-  // façon rien à faire dans un récap avant sa date.
+  // Bornée aux 3 derniers jours passés + le reste de la journée UTC en
+  // cours : sans borne basse, la requête ramène aussi les centaines/
+  // milliers de matchs SCHEDULED du reste de la saison (tous "non
+  // notifiés" par défaut) et se fait tronquer par la limite par défaut de
+  // PostgREST (1000 lignes) — un match déjà joué mais trié après ce seuil
+  // ne serait alors jamais repris.
+  //
+  // La borne haute doit couvrir TOUTE la journée UTC en cours, pas
+  // seulement "jusqu'à maintenant" : sinon un match du soir pas encore
+  // commencé (ex. 19h30 UTC) est absent de la requête tant qu'il n'a pas
+  // débuté, donc absent du groupe de sa journée — qui semble alors "close"
+  // dès que les matchs plus tôt dans la journée sont finis, et part en
+  // récap prématuré/incomplet. Un deuxième récap suit ensuite pour ce
+  // match tardif une fois terminé, au lieu d'un seul message pour toute
+  // la soirée (bug observé le 16/08 : 13 matchs à 19h15, 2 de plus à
+  // 21h30 pour la même journée).
   const now = new Date()
   const windowStart = new Date(now.getTime() - 3 * 24 * 3_600_000).toISOString()
+  const endOfToday = new Date(now)
+  endOfToday.setUTCHours(24, 0, 0, 0)
 
   const { data: rows } = await supabase
     .from('matches_cache')
@@ -169,7 +181,7 @@ async function processMatchRecaps(
     .eq('sport', sportValue)
     .is('notified_at', null)
     .gte('utc_date', windowStart)
-    .lt('utc_date', now.toISOString())
+    .lt('utc_date', endOfToday.toISOString())
 
   if (!rows || rows.length === 0) return 0
 
@@ -203,7 +215,11 @@ async function processMatchRecaps(
 
     const emoji = sportValue === 'basketball' ? '🏀' : '⚽'
     const sections = [...groupByLeague(finished, sportValue).entries()].map(([leagueName, ms]) => {
-      const lines = ms.map((m) => `${m.home_team} ${m.home_score} - ${m.away_score} ${m.away_team}`)
+      // Filet de sécurité : un match qu'on annonce ici est déjà considéré
+      // terminé (FINISHED ou stale-live), donc un score encore null à ce
+      // stade est plus probablement un vrai 0 mal remonté qu'un score
+      // manquant — mieux vaut afficher 0 - 0 que "null - null".
+      const lines = ms.map((m) => `${m.home_team} ${m.home_score ?? 0} - ${m.away_score ?? 0} ${m.away_team}`)
       return `---------${leagueName}---------\n${lines.join('\n')}`
     })
     const content = `${emoji} **Récap de la soirée**\n\n${sections.join('\n\n')}\n\nVa les marquer comme vus sur FanLog 👉 ${SITE_URL}`

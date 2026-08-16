@@ -60,7 +60,7 @@ export default function MatchDetailModal({ match, onClose }) {
         <div className="flex items-center justify-center gap-3">
           <TeamSide name={match.home_team} crest={match.home_crest} align="right" />
           <span className="shrink-0 px-1 text-xl font-bold tabular-nums text-white">
-            {match.home_score} - {match.away_score}
+            {match.home_score ?? '-'} - {match.away_score ?? '-'}
           </span>
           <TeamSide name={match.away_team} crest={match.away_crest} align="left" />
         </div>
