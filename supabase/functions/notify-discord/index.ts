@@ -37,15 +37,25 @@ const CORS_HEADERS = {
 const SITE_URL = 'https://foot-tracker.pages.dev'
 const TERMINAL_STATUSES = ['FINISHED', 'POSTPONED', 'CANCELLED']
 
-// Même compromis que côté frontend (src/lib/eventStatus.js) : le cache
-// Highlightly ne se rafraîchit que toutes les 3h, donc un match peut rester
-// IN_PLAY dans matches_cache bien après sa fin réelle. Sans ce filet de
-// sécurité, UN SEUL match encore marqué IN_PLAY (à tort) bloquerait le récap
-// de toute la soirée indéfiniment, pour tous les sports. Passé ce délai
-// depuis le coup d'envoi, on traite le match comme terminé (avec son
-// dernier score connu) plutôt que d'attendre un rafraîchissement qui n'a
-// pas eu lieu.
-const STALE_LIVE_HOURS = 2
+// Le cache Highlightly ne se rafraîchit que toutes les 3h (voir
+// fetch-highlightly), donc un match peut rester IN_PLAY dans matches_cache
+// bien après sa fin réelle. Sans filet de sécurité, UN SEUL match encore
+// marqué IN_PLAY (à tort) bloquerait le récap de toute la soirée
+// indéfiniment. Mais annoncer un match trop tôt est PIRE que d'attendre :
+// un récap Discord est définitif (notified_at empêche tout renvoi), donc
+// annoncer un score encore figé au coup d'envoi (souvent 0-0) grave une
+// fausse information pour de bon. D'où deux conditions, pas une seule :
+//   - MATCH_DURATION_HOURS : marge large pour qu'un match ait eu le temps
+//     de vraiment se terminer (prolongations/tirs au but inclus).
+//   - ET la dernière lecture du cache (fetched_at) doit être postérieure à
+//     cette fin probable — sinon le score en cache est encore celui
+//     d'avant/pendant le match, pas le score final, même si beaucoup de
+//     temps s'est écoulé depuis le coup d'envoi.
+// STALE_LIVE_HOURS reste un filet de secours ultime si fetched_at ne
+// bouge plus jamais (fetch-highlightly en panne prolongée) : au-delà, on
+// annonce quand même plutôt que de bloquer le récap pour toujours.
+const MATCH_DURATION_HOURS = 2.5
+const STALE_LIVE_HOURS = 6
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL')!,
@@ -93,13 +103,20 @@ function isRaceOver(race: any): boolean {
   return relevant.every((s: any) => new Date(s.date_end).getTime() < Date.now())
 }
 
-// Un match encore IN_PLAY/PAUSED/SUSPENDED dont le coup d'envoi remonte à
-// plus de STALE_LIVE_HOURS est traité comme terminé (cache jamais rafraîchi
-// après la fin réelle), sans quoi il resterait "en attente" pour toujours.
+// Un match encore IN_PLAY/PAUSED/SUSPENDED est traité comme terminé
+// seulement si (a) le match a eu largement le temps de se finir ET (b) le
+// cache a été relu depuis — sinon son score n'est pas fiable comme score
+// final, même après très longtemps (voir commentaire de MATCH_DURATION_HOURS
+// ci-dessus).
 function isStaleLive(m: any): boolean {
   if (TERMINAL_STATUSES.includes(m.status)) return false
-  const hoursSinceKickoff = (Date.now() - new Date(m.utc_date).getTime()) / 3_600_000
-  return hoursSinceKickoff > STALE_LIVE_HOURS
+  const kickoff = new Date(m.utc_date).getTime()
+  const hoursSinceKickoff = (Date.now() - kickoff) / 3_600_000
+  if (hoursSinceKickoff > STALE_LIVE_HOURS) return true // filet de secours ultime
+
+  const expectedEnd = kickoff + MATCH_DURATION_HOURS * 3_600_000
+  const refreshedSinceExpectedEnd = new Date(m.fetched_at).getTime() >= expectedEnd
+  return hoursSinceKickoff > MATCH_DURATION_HOURS && refreshedSinceExpectedEnd
 }
 
 function isEffectivelyClosed(m: any): boolean {
@@ -245,6 +262,21 @@ Deno.serve(async (req) => {
 
   const { test } = await req.json().catch(() => ({ test: false }))
   const skipped: string[] = []
+
+  // fetch-matches/fetch-highlightly/fetch-nba ne se rafraîchissent
+  // normalement que quand quelqu'un ouvre le site (voir triggerXRefresh()
+  // côté frontend) — si personne ne l'ouvre un jour donné, leur cache reste
+  // figé indéfiniment, y compris pendant les heures où des matchs se
+  // jouent. Ce cron tourne lui de façon fiable toutes les 15 min, qu'il y
+  // ait du monde sur le site ou non : autant s'en servir pour forcer un
+  // rafraîchissement avant d'évaluer les récaps. Chaque fonction se
+  // limite déjà elle-même en interne (isCacheFresh), donc ça ne coûte pas
+  // plus de requêtes API externes que d'habitude — juste plus fiable.
+  await Promise.allSettled([
+    supabase.functions.invoke('fetch-matches'),
+    supabase.functions.invoke('fetch-highlightly'),
+    supabase.functions.invoke('fetch-nba'),
+  ])
 
   const footballRecaps = await processMatchRecaps('football', 'football', Boolean(test), skipped)
   const basketballRecaps = await processMatchRecaps('basketball', 'basketball', Boolean(test), skipped)

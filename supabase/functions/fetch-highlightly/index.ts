@@ -14,15 +14,25 @@
 // plage. Récupérer une saison entière (~300-400 matchs/compétition) à
 // chaque rafraîchissement est donc hors de question.
 //
-// Deux vitesses de rafraîchissement, pour ne pas sacrifier le suivi "live"
-// du jour même au profit de la fenêtre large :
+// Trois vitesses de rafraîchissement, pour ne pas sacrifier le suivi
+// "live" du jour même au profit de la fenêtre large :
 //   - Aujourd'hui : TTL courte (3h) — un match qui vient de commencer ou de
 //     se terminer apparaît à jour en quelques heures, pas le lendemain.
+//   - Hier : un seul rattrapage par jour (TTL 24h). L'API Highlightly
+//     n'interroge qu'UN jour à la fois et la fenêtre "aujourd'hui" ne
+//     revisite jamais une date une fois qu'elle est passée — un match qui
+//     démarre tard (ex. 23h UTC) peut donc voir son dernier rafraîchissement
+//     "aujourd'hui" avoir lieu AVANT sa fin réelle, puis rester figé pour
+//     toujours dès que minuit UTC passe, faute d'un nouveau passage sur
+//     cette date. Cette passe donne une deuxième chance après le
+//     changement de jour, une fois que tous les matchs d'hier sont
+//     nécessairement terminés.
 //   - Les 9 jours suivants : TTL longue (24h), comme avant — rien ne change
 //     sur un match qui n'a pas encore eu lieu, pas besoin de le vérifier
 //     souvent.
-// Budget pire cas : (24h/3h) × 5 ligues [aujourd'hui] + 9 jours × 5 ligues
-// [fenêtre future, 1x/24h] = 40 + 45 = 85 requêtes/jour, sous les 100/jour.
+// Budget pire cas : (24h/3h) × 5 ligues [aujourd'hui] + 5 ligues [hier,
+// 1x/24h] + 9 jours × 5 ligues [fenêtre future, 1x/24h] = 40 + 5 + 45 = 90
+// requêtes/jour, sous les 100/jour.
 // ============================================================================
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
@@ -68,27 +78,35 @@ function currentSeason(): number {
   return month >= 6 ? now.getUTCFullYear() : now.getUTCFullYear() - 1
 }
 
-// today = true : ne regarde que les lignes datées d'aujourd'hui (fraîcheur
-// du suivi live). today = false : ne regarde QUE les lignes datées après
-// aujourd'hui (fraîcheur de la fenêtre future) — sans cette exclusion, les
-// mises à jour fréquentes de la passe 1 (toutes les 3h) feraient paraître
-// la fenêtre "fraîche" en permanence et elle ne se rafraîchirait plus jamais.
-// S'il n'y a aucune ligne correspondante (ex. aucun match aujourd'hui dans
-// ces 5 ligues), on considère que ce n'est pas frais : mieux vaut un appel
-// API qui revient vide qu'un cache jamais vérifié.
-async function isCacheFresh(hours: number, today: boolean): Promise<boolean> {
+// Minuit UTC du jour "aujourd'hui + offsetDays" (offsetDays peut être
+// négatif) et le minuit suivant — sert à isoler "hier"/"aujourd'hui"/
+// "à partir de demain" pour le check de fraîcheur ET les dates à envoyer
+// à l'API.
+function dayBoundsUTC(offsetDays: number): { start: Date; end: Date } {
   const start = new Date()
   start.setUTCHours(0, 0, 0, 0)
+  start.setUTCDate(start.getUTCDate() + offsetDays)
   const end = new Date(start.getTime() + 24 * 3_600_000)
+  return { start, end }
+}
 
+// range = plage de dates à vérifier ({start, end} bornée des deux côtés
+// pour "hier"/"aujourd'hui" ; {start} seul, sans end, pour "à partir de
+// demain" — ouvert à droite, pas de limite haute nécessaire).
+// Sans cette délimitation par plage, les mises à jour fréquentes d'une
+// passe feraient paraître les autres "fraîches" en permanence alors
+// qu'elles n'ont pas vraiment été revérifiées. S'il n'y a aucune ligne
+// correspondante (ex. aucun match ce jour-là dans ces 5 ligues), on
+// considère que ce n'est pas frais : mieux vaut un appel API qui revient
+// vide qu'un cache jamais vérifié.
+async function isCacheFresh(hours: number, range: { start: Date; end?: Date }): Promise<boolean> {
   let query = supabase
     .from('matches_cache')
     .select('fetched_at')
     .in('league', LEAGUES.map((l) => l.code))
+    .gte('utc_date', range.start.toISOString())
 
-  query = today
-    ? query.gte('utc_date', start.toISOString()).lt('utc_date', end.toISOString())
-    : query.gte('utc_date', end.toISOString())
+  if (range.end) query = query.lt('utc_date', range.end.toISOString())
 
   const { data, error } = await query.order('fetched_at', { ascending: false }).limit(1).maybeSingle()
 
@@ -96,6 +114,28 @@ async function isCacheFresh(hours: number, today: boolean): Promise<boolean> {
 
   const ageHours = (Date.now() - new Date(data.fetched_at).getTime()) / 3_600_000
   return ageHours < hours
+}
+
+// La passe "hier" a besoin d'un critère différent d'un TTL classique : la
+// passe "aujourd'hui" d'hier a très bien pu tourner tard dans la journée
+// (ex. 20h UTC), ce qui la rendrait encore "fraîche" au sens d'un TTL de
+// 24h des heures après le changement de jour — alors qu'aucun rattrapage
+// n'a jamais eu lieu APRÈS minuit UTC. Le seul critère qui compte : y a-t-il
+// eu au moins une lecture d'hier depuis le début d'aujourd'hui ?
+async function isYesterdayCaughtUp(todayStart: Date): Promise<boolean> {
+  const yesterday = dayBoundsUTC(-1)
+  const { data, error } = await supabase
+    .from('matches_cache')
+    .select('fetched_at')
+    .in('league', LEAGUES.map((l) => l.code))
+    .gte('utc_date', yesterday.start.toISOString())
+    .lt('utc_date', yesterday.end.toISOString())
+    .order('fetched_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (error || !data) return false
+  return new Date(data.fetched_at).getTime() >= todayStart.getTime()
 }
 
 // Vocabulaire propre à Highlightly (state.description, texte libre) ->
@@ -171,11 +211,38 @@ Deno.serve(async (req) => {
   }
 
   const season = currentSeason()
-  const results: { league: string; tier: 'today' | 'window'; status: 'ok' | 'error'; count?: number; error?: string }[] = []
+  const results: { league: string; tier: 'yesterday' | 'today' | 'window'; status: 'ok' | 'error'; count?: number; error?: string }[] = []
+
+  const todayBounds = dayBoundsUTC(0)
+  const yesterdayBounds = dayBoundsUTC(-1)
+
+  // Passe 0 : hier, une seule tentative de rattrapage par jour — pour un
+  // match tardif dont le dernier passage de la passe "aujourd'hui" (avant
+  // minuit UTC) avait eu lieu avant sa fin réelle. Tous les matchs d'hier
+  // sont nécessairement terminés désormais, une seule relecture suffit.
+  if (!(await isYesterdayCaughtUp(todayBounds.start))) {
+    const yesterday = isoDate(yesterdayBounds.start)
+    for (const league of LEAGUES) {
+      try {
+        const matches = await fetchDayMatches(league.id, season, yesterday)
+        const rows = matches.map((m) => mapMatchToRow(m, league.code))
+        if (rows.length > 0) {
+          const { error } = await supabase
+            .from('matches_cache')
+            .upsert(rows, { onConflict: 'sport,external_id' })
+          if (error) throw error
+        }
+        results.push({ league: league.code, tier: 'yesterday', status: 'ok', count: rows.length })
+        await sleep(300)
+      } catch (err) {
+        results.push({ league: league.code, tier: 'yesterday', status: 'error', error: (err as Error).message })
+      }
+    }
+  }
 
   // Passe 1 : aujourd'hui, TTL courte — c'est ici que se joue le suivi live.
-  if (!(await isCacheFresh(TODAY_CACHE_HOURS, true))) {
-    const today = isoDate(new Date())
+  if (!(await isCacheFresh(TODAY_CACHE_HOURS, todayBounds))) {
+    const today = isoDate(todayBounds.start)
     for (const league of LEAGUES) {
       try {
         const matches = await fetchDayMatches(league.id, season, today)
@@ -194,9 +261,9 @@ Deno.serve(async (req) => {
     }
   }
 
-  // Passe 2 : les 9 jours suivants, TTL longue — aujourd'hui déjà couvert
-  // par la passe 1, pas la peine de le refaire ici.
-  if (!(await isCacheFresh(CACHE_HOURS, false))) {
+  // Passe 2 : les 9 jours suivants, TTL longue — aujourd'hui/hier déjà
+  // couverts par les passes précédentes, pas la peine de les refaire ici.
+  if (!(await isCacheFresh(CACHE_HOURS, { start: todayBounds.end }))) {
     const days = Array.from({ length: WINDOW_DAYS - 1 }, (_, i) => isoDate(new Date(Date.now() + (i + 1) * 24 * 3_600_000)))
 
     for (const league of LEAGUES) {
