@@ -3,8 +3,11 @@
 //
 // Rôle : aller chercher les matchs NBA à venir sur balldontlie.io et les
 // stocker dans `matches_cache` (sport='basketball', league='NBA'), sans
-// jamais exposer la clé API au navigateur. Même logique de cache 6h que
-// fetch-matches (voir ce fichier pour le raisonnement détaillé).
+// jamais exposer la clé API au navigateur. Même logique de cache que
+// fetch-matches (voir ce fichier pour le raisonnement détaillé) : appelée
+// aussi par notify-discord à chaque passage de son cron pour rester à jour
+// sans dépendre des visites du site, TTL courte (1h) car la limite
+// balldontlie est par MINUTE (5 req/min), pas par jour.
 //
 // On ne récupère qu'une fenêtre glissante de ~90 jours à venir (pas la
 // saison entière, ~1230 matchs) : ça reste dans l'esprit "calendrier de ce
@@ -15,7 +18,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import { NBA_TEAMS } from '../_shared/nbaTeams.ts'
 
-const CACHE_HOURS = 6
+const CACHE_HOURS = 1
 const WINDOW_DAYS = 90
 const LEAGUE = 'NBA'
 

@@ -8,19 +8,28 @@
 // les secrets de cette fonction, côté serveur Supabase).
 //
 // Cette fonction est appelée par le frontend (supabase.functions.invoke)
-// à chaque ouverture du calendrier. Pour éviter de dépasser le quota
-// football-data.org (10 requêtes/min sur le plan gratuit) même si plusieurs
-// amis ouvrent le site en même temps, elle ne refait un vrai fetch externe
-// que si le cache d'une ligue a plus de CACHE_HOURS heures. Sinon elle ne
-// fait qu'une lecture Supabase (gratuite et illimitée) et ne touche pas
-// à l'API externe.
+// à chaque ouverture du calendrier, ET par notify-discord à chaque passage
+// de son cron (toutes les 15 min, voir ce fichier) pour garantir que les
+// scores sont à jour avant d'évaluer un récap, même si personne n'ouvre le
+// site. Pour éviter de dépasser le quota football-data.org (10 requêtes/min
+// sur le plan gratuit — une limite par MINUTE, pas par jour) même si
+// plusieurs amis ouvrent le site en même temps, elle ne refait un vrai
+// fetch externe que si le cache d'une ligue a plus de CACHE_HOURS heures.
+// Sinon elle ne fait qu'une lecture Supabase (gratuite et illimitée) et ne
+// touche pas à l'API externe.
+//
+// CACHE_HOURS volontairement court (1h, pas 6h) : le seul frein est un
+// quota par minute largement sous-utilisé (6 ligues × 1 appel toutes les
+// ~1h ≈ rien), donc pas de raison de laisser un score final traîner
+// jusqu'à 6h avant d'apparaître dans le cache — c'est justement ce qui
+// retardait/faussait le récap Discord du soir.
 //
 // Déploiement : voir le README ("Déployer l'Edge Function").
 // ============================================================================
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
-const CACHE_HOURS = 6
+const CACHE_HOURS = 1
 
 // L'Europa League (EL) n'est pas disponible sur le plan gratuit de
 // football-data.org, donc pas incluse ici.
